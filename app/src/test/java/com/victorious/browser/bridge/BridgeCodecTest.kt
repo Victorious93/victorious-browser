@@ -87,9 +87,20 @@ class BridgeCodecTest {
     fun allowlistHasNoDebugPackage() {
         assertEquals("ai.droidcommand.app", ControllerAllowlist.CONTROLLER_PACKAGE)
         assertFalse(ControllerAllowlist.isAllowedPackage("ai.droidcommand.app.debug"))
-        assertTrue(ControllerAllowlist.DEBUG_CERT_SHA256.startsWith("88:00:51:A6"))
-        assertTrue(ControllerAllowlist.DEBUG_CERT_SHA256.endsWith("C8:4D"))
-        assertTrue(ControllerAllowlist.RELEASE_CERT_SHA256.startsWith("9E:A7"))
-        assertTrue(ControllerAllowlist.RELEASE_CERT_SHA256.endsWith("2D:8D"))
+    }
+
+    @Test
+    fun pinnedControllerCertFingerprintsExact() {
+        val debug =
+            "88:00:51:A6:D9:5D:38:DD:8D:81:E1:93:1E:17:05:48:03:87:D5:93:C3:09:43:53:99:68:E6:EF:11:A0:C8:4D"
+        val release =
+            "9E:A7:B3:14:94:5B:0A:62:97:15:6F:F7:06:E7:0C:0A:B1:B7:24:DE:06:D5:09:9C:A5:12:8A:B4:43:F7:2D:8D"
+        assertEquals(debug, ControllerAllowlist.DEBUG_CERT_SHA256)
+        assertEquals(release, ControllerAllowlist.RELEASE_CERT_SHA256)
+        // Format-matched to CallerVerifier (%02X colon) + normalize (uppercase, keep colons).
+        assertTrue(ControllerAllowlist.isAllowedCert(debug))
+        assertTrue(ControllerAllowlist.isAllowedCert(release.lowercase()))
+        assertTrue(ControllerAllowlist.PINNED_CERTS.contains(ControllerAllowlist.normalize(debug)))
+        assertEquals(2, ControllerAllowlist.PINNED_CERTS.size)
     }
 }

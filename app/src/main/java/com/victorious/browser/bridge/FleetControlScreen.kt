@@ -100,10 +100,10 @@ fun FleetControlScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        Text("DEBUG cert SHA-256 (placeholder — fill fleet fingerprint):", style = MaterialTheme.typography.labelSmall)
+        Text("DEBUG cert SHA-256 (fleet-provided controller):", style = MaterialTheme.typography.labelSmall)
         Text(ControllerAllowlist.DEBUG_CERT_SHA256, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall)
         Spacer(Modifier.height(4.dp))
-        Text("RELEASE cert SHA-256 (placeholder — fill fleet fingerprint):", style = MaterialTheme.typography.labelSmall)
+        Text("RELEASE cert SHA-256 (fleet-provided controller caller pin):", style = MaterialTheme.typography.labelSmall)
         Text(ControllerAllowlist.RELEASE_CERT_SHA256, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall)
 
         Spacer(Modifier.height(16.dp))

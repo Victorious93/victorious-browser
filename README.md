@@ -32,8 +32,9 @@ owner's own devices (EXTERNAL_NODE class).
 ### Security model
 1. **Caller identity** via `Message.sendingUid` (not `Binder.getCallingUid()`):
    resolve packages for that uid and verify signing-cert SHA-256 against the
-   pinned DEBUG + RELEASE fingerprints for package `ai.droidcommand.app` only
-   (no `ai.droidcommand.app.debug` pin — dropped by the fleet)
+   pinned DEBUG + RELEASE fleet-provided controller cert SHA-256 for package
+   `ai.droidcommand.app` only (no `ai.droidcommand.app.debug` pin — dropped by the fleet).
+   RELEASE pin verifies the CALLER; it is not this app's own signing key
 2. **External control** persisted switch — **OFF by default**; when off every
    op is rejected with `not_paired`
 3. Envelope / parameter validity
