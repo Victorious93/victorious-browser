@@ -44,7 +44,10 @@ import com.victorious.browser.ui.theme.NeonMagenta
 private const val HOME_URL = "https://example.com"
 
 @Composable
-fun BrowserScreen(modifier: Modifier = Modifier) {
+fun BrowserScreen(
+    onOpenNetwork: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     var urlBarText by remember { mutableStateOf(HOME_URL) }
     var currentUrl by remember { mutableStateOf(HOME_URL) }
     var pageTitle by remember { mutableStateOf("Victorious Browser") }
@@ -164,6 +167,13 @@ fun BrowserScreen(modifier: Modifier = Modifier) {
                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
+            Spacer(Modifier.width(4.dp))
+            TextButton(
+                onClick = onOpenNetwork,
+                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+            ) {
+                Text("Network")
+            }
         }
 
         if (isLoading || (progress in 1..99)) {
