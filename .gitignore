@@ -1,0 +1,44 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle files
+.gradle/
+build/
+# IMPORTANT: do NOT ignore gradle/wrapper/gradle-wrapper.jar
+# (wrapper jar is intentionally committed)
+
+# Local configuration
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Android Studio Navigation editor
+.navigation/
+
+# Keystore — ignore release keys and local secrets, but KEEP app/debug.keystore
+*.jks
+*.keystore
+!app/debug.keystore
+
+# Misc
+*.log
+*.hprof
+.kotlin/
