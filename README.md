@@ -21,6 +21,11 @@ for the developer's own traffic.
   searchable history (landed on `feature/deep-capture`)
 - **Mesh reachability** — resolve & probe mesh-flagged fleet panels over
   Victorious Mesh before opening (landed on `feature/mesh-reachability`)
+- **Multi-tab browsing + quick fleet-panel switching** — multiple WebView
+  tabs (tab bar: new / close / switch, title + favicon-or-host) with each tab's
+  live WebView instance preserved across switches, plus a bottom-sheet palette to
+  jump to any configured fleet panel in the current or a new tab; mesh-flagged
+  panels still pass the mesh-reachability check (landed on `feature/multi-tab`)
 
 ## Fleet control bridge
 
