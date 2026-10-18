@@ -170,7 +170,7 @@ fun NetworkHistoryScreen(
 
         Spacer(Modifier.height(8.dp))
         HorizontalDivider()
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         if (selected != null) {
             DetailView(
@@ -295,7 +295,7 @@ private fun DetailView(
 private fun Section(title: String, content: @Composable () -> Unit) {
     Spacer(Modifier.height(10.dp))
     Text(title, style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
-    Spacer(modifier.height(4.dp))
+    Spacer(modifier = Modifier.height(4.dp))
     content()
 }
 

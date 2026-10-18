@@ -163,7 +163,7 @@ fun ModifyReplayScreen(
             style = MaterialTheme.typography.titleSmall,
             color = NeonMagenta,
         )
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
             value = method,
@@ -172,7 +172,7 @@ fun ModifyReplayScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = url,
             onValueChange = { url = it },
@@ -180,7 +180,7 @@ fun ModifyReplayScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = headersText,
             onValueChange = { headersText = it },
@@ -189,7 +189,7 @@ fun ModifyReplayScreen(
                 .fillMaxWidth()
                 .heightIn(min = 120.dp),
         )
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = bodyText,
             onValueChange = { bodyText = it },
@@ -199,9 +199,9 @@ fun ModifyReplayScreen(
                 .heightIn(min = 100.dp),
         )
 
-        Spacer(modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         HorizontalDivider()
-        Spacer(modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         when (mode) {
             EditorMode.Intercept -> {
@@ -286,7 +286,7 @@ fun ModifyReplayScreen(
         }
 
         lastStatus?.let {
-            Spacer(modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 it,
                 style = MaterialTheme.typography.bodySmall,
