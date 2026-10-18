@@ -45,11 +45,13 @@ private const val HOME_URL = "https://example.com"
 
 @Composable
 fun BrowserScreen(
+    initialUrl: String = HOME_URL,
     onOpenNetwork: () -> Unit = {},
+    onBackToLauncher: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    var urlBarText by remember { mutableStateOf(HOME_URL) }
-    var currentUrl by remember { mutableStateOf(HOME_URL) }
+    var urlBarText by remember { mutableStateOf(initialUrl) }
+    var currentUrl by remember { mutableStateOf(initialUrl) }
     var pageTitle by remember { mutableStateOf("Victorious Browser") }
     var progress by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(false) }
@@ -71,9 +73,13 @@ fun BrowserScreen(
         focusManager.clearFocus()
     }
 
-    BackHandler(enabled = canGoBack) {
-        webViewRef?.goBack()
-        syncNav(webViewRef)
+    BackHandler(enabled = canGoBack || onBackToLauncher != null) {
+        if (canGoBack) {
+            webViewRef?.goBack()
+            syncNav(webViewRef)
+        } else {
+            onBackToLauncher?.invoke()
+        }
     }
 
     Column(
@@ -168,6 +174,14 @@ fun BrowserScreen(
                 ),
             )
             Spacer(Modifier.width(4.dp))
+            if (onBackToLauncher != null) {
+                TextButton(
+                    onClick = onBackToLauncher,
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+                ) {
+                    Text("Panels")
+                }
+            }
             TextButton(
                 onClick = onOpenNetwork,
                 colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
@@ -216,7 +230,7 @@ fun BrowserScreen(
                         onTitleChanged = { title -> pageTitle = title },
                     )
                     webViewRef = this
-                    loadUrl(HOME_URL)
+                    loadUrl(initialUrl)
                 }
             },
             update = { wv ->
