@@ -96,4 +96,7 @@ dependencies {
     implementation(libs.bouncycastle.bcpkix)
     implementation(libs.bouncycastle.bcprov)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.org.json)
 }

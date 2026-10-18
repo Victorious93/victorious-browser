@@ -13,6 +13,52 @@ for the developer's own traffic.
   local CA (landed on `feature/intercept-proxy`)
 - **Fleet-panel launcher** — home screen for the owner's own dashboards
   (landed on `feature/fleet-panel-launcher`)
+- **Fleet control bridge** — bound Messenger IPC for the owner's controller
+  (landed on `feature/fleet-bridge`)
+
+## Fleet control bridge
+
+First-party inter-app automation: a bound **Messenger** service so the owner's
+OWN controller app (`ai.droidcommand.app`) can drive Victorious Browser on the
+owner's own devices (EXTERNAL_NODE class).
+
+### Protocol
+- Intent action: `com.victorious.browser.action.BRIDGE`
+- `Message.what` = `1` request / `2` response
+- Wire: newline-delimited JSON, `BRIDGE_PROTOCOL_MAJOR = 1`
+- Envelope: `BridgeRequest { id, op, params }` →
+  `BridgeResponse { id, ok, result?, error? }` with `error = { category, message }`
+
+### Security model
+1. **Caller identity** via `Message.sendingUid` (not `Binder.getCallingUid()`):
+   resolve packages for that uid and verify signing-cert SHA-256 against the
+   pinned DEBUG + RELEASE fingerprints for package `ai.droidcommand.app` only
+   (no `ai.droidcommand.app.debug` pin — dropped by the fleet)
+2. **External control** persisted switch — **OFF by default**; when off every
+   op is rejected with `not_paired`
+3. Envelope / parameter validity
+
+Check order on each request: identity → external-control switch → envelope.
+
+### Operations
+| op | params | result |
+|---|---|---|
+| `browser.capabilities.get` | `{}` | `{ protocol_major, package, node_id, operations, proxy_supported }` |
+| `browser.open_url` | `{ url }` | `{ status:"opened" }` |
+| `browser.panel.list` | `{}` | `{ panels:[{id,name,url,kind}] }` |
+| `browser.panel.open` | `{ panel_id }` | `{ status:"opened" }` |
+| `browser.recon.summary` | `{ limit?, since? }` | `{ count, entries:[{method,url,status,host,ts}] }` |
+| `browser.proxy.set` | `{ enabled:bool }` | fire-and-forget ack |
+| `browser.proxy.status` | `{}` | `{ running, port, ca_installed }` |
+
+Parameterless ops must receive exactly `{}` — non-empty params → `invalid_parameters`.
+
+Error categories: `invalid_parameters`, `not_paired`, `not_found`, `proxy_error`, `internal`.
+
+Node-id: generated/persisted on first run, matches `^browser-[0-9a-f]{32}$`.
+
+In-app **Fleet control** settings screen (from the launcher **Control** button):
+external-control switch, read-only node-id, pinned controller info.
 
 ## Fleet-panel launcher
 

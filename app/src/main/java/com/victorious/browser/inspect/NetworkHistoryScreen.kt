@@ -41,8 +41,7 @@ import com.victorious.browser.ui.theme.NeonMagenta
  * Compose "Network / History" screen: list of captured entries, detail view
  * (headers, decoded JWT, cookies), and an on/off switch for the inspection proxy.
  *
- * TODO(control-bridge): a later control-bridge will toggle the inspection proxy
- * remotely. Do NOT build that bridge now — the Switch below is the local UI only.
+ * The Switch is the local UI; the fleet bridge also toggles via browser.proxy.set.
  */
 @Composable
 fun NetworkHistoryScreen(
@@ -74,9 +73,7 @@ fun NetworkHistoryScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Proxy on/off — local UI only.
-        // TODO(control-bridge): later control-bridge will toggle this; leave that
-        // bridge for a follow-up. Direct start/stop for now.
+        // Proxy on/off — local UI; bridge uses LocalProxyService.start/stop too.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -94,7 +91,6 @@ fun NetworkHistoryScreen(
             Switch(
                 checked = proxyOn,
                 onCheckedChange = { enabled ->
-                    // TODO(control-bridge): replace this direct call with the bridge.
                     if (enabled) {
                         val ok = LocalProxyService.start(context.applicationContext)
                         if (!ok) {

@@ -46,9 +46,8 @@ object LocalProxyService {
      * Start the localhost proxy and (if supported) route this app's WebView
      * through it via [ProxyController]. Returns true on success.
      *
-     * TODO(control-bridge): a later control-bridge will toggle this — do not
-     * build that bridge in this layer. The Compose on/off switch calls start/stop
-     * directly for now.
+     * Toggled from the Network UI and from the fleet control bridge
+     * (`browser.proxy.set` / `browser.proxy.status`).
      */
     @Synchronized
     fun start(context: Context, preferredPort: Int = DEFAULT_PORT): Boolean {
