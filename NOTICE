@@ -1,9 +1,31 @@
 Victorious Browser
 Copyright (c) Victorious Fleet
 
-This product will include third-party open source software.
-License attributions for shell and proxy libraries will be listed here once those
-dependencies are approved and added.
+This product includes third-party open source software.
 
----
-(placeholder — no third-party runtime libraries beyond AndroidX / Compose yet)
+-----------------------------------------------------------------------------
+androidx.webkit (AndroidX WebKit)
+Copyright The Android Open Source Project
+License: Apache License 2.0
+https://developer.android.com/jetpack/androidx/releases/webkit
+https://www.apache.org/licenses/LICENSE-2.0
+
+-----------------------------------------------------------------------------
+AndroidX / Jetpack Compose (core-ktx, activity-compose, compose-ui, material3, …)
+Copyright The Android Open Source Project
+License: Apache License 2.0
+https://www.apache.org/licenses/LICENSE-2.0
+
+-----------------------------------------------------------------------------
+Patterns note — Lightning Browser
+This project draws on navigation / WebViewClient patterns observed in
+Lightning Browser (https://github.com/anthonycr/Lightning-Browser).
+Lightning Browser is licensed under the Mozilla Public License 2.0 (MPL-2.0).
+No Lightning Browser source files are copied verbatim into this repository;
+this notice acknowledges conceptual inspiration only.
+https://www.mozilla.org/en-US/MPL/2.0/
+
+-----------------------------------------------------------------------------
+Shell engine and intercepting-proxy library picks beyond system WebView +
+androidx.webkit are pending approval; additional attributions will be added here
+when those dependencies land.
