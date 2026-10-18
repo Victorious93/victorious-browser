@@ -19,6 +19,8 @@ for the developer's own traffic.
   (landed on `feature/proxy-modify-replay`)
 - **Deep capture** — full req/resp bodies, cookies+attrs, JWT decode,
   searchable history (landed on `feature/deep-capture`)
+- **Mesh reachability** — resolve & probe mesh-flagged fleet panels over
+  Victorious Mesh before opening (landed on `feature/mesh-reachability`)
 
 ## Fleet control bridge
 
@@ -79,15 +81,52 @@ own locally-hosted / fleet web dashboards and opens them in the in-app WebView.
 - Seeded once with editable DEFAULT panels (placeholder `127.0.0.1` URLs/ports —
   the owner configures real addresses; no credentials or private IPs invented):
   KYC-AuditLab, Headscale admin, Metasploit web console, Local HTTP tool template
-- **Mesh awareness (lightweight):** per-panel `reachOverMesh` flag + UI note that
-  mesh routing is provided by the separate Victorious Mesh app. No VPN/mesh
-  networking is implemented here — `TODO(mesh-reachability)` marks where that
-  will later resolve
-- `TODO(control-bridge)` marks where future ops `browser.panel.list` /
-  `browser.panel.open` will read/drive the store — Messenger bridge is **not**
-  built in this layer
+- **Mesh reachability:** per-panel `reachOverMesh` flag; opening a mesh panel
+  goes through host classification + tunnel-signal / TCP probe (see
+  [Mesh reachability](#mesh-reachability) below). No VpnService in this app.
+- Fleet bridge ops `browser.panel.list` / `browser.panel.open` already read/drive
+  the store via the Messenger bridge (landed on `feature/fleet-bridge`)
 - WebView opens when a panel is tapped; **Panels** returns to the launcher;
   Network / free Browser remain reachable from the chrome
+
+
+## Mesh reachability
+
+For fleet panels with **Reach over mesh** enabled, opening goes through a
+best-effort resolution layer (`MeshResolution` + `MeshReachability`) instead of
+jumping straight into the WebView:
+
+1. **Classify** the panel URL host: loopback / direct / Tailscale CGNAT
+   `100.64.0.0/10` / mesh IPv6 `fd7a:115c:a1e0::/48` / MagicDNS suffix
+   (`.ts.net`, `.tailnet`, `.mesh.victorious`) / bare node name.
+2. **Probe tunnel signals** (best-effort — no published Victorious Mesh API is
+   used or invented): local `NetworkInterface` name prefixes
+   (`tun`, `tailscale`, `wg`, …) and presence of a CGNAT / mesh IPv6 address;
+   optional soft signal via `NetworkCapabilities.TRANSPORT_VPN`; package-presence
+   hint for candidate Victorious Mesh package ids.
+3. **Resolve** name-based hosts (`InetAddress` lookup), then **TCP connect** to
+   host:port (same idea as the direct reachability checker).
+4. **Decide**:
+   - TCP connect succeeds → open in WebView
+   - tunnel signals present, name resolves / IP literal, TCP fail → "mesh node unreachable"
+   - tunnel signals present but name does not resolve → "unknown mesh host"
+   - no tunnel signals + (name fails or TCP fails) → actionable **"Victorious Mesh
+     tunnel appears down — bring it up in the Victorious Mesh app"**
+   - unparseable host → "unknown mesh host"
+5. The blocked dialog offers **Retry** and, when a candidate Victorious Mesh
+   package is installed, **Open Victorious Mesh** (standard launcher intent only).
+
+This browser does **not** hold the Android `VpnService` slot (reserved for
+Victorious Mesh). Routing is provided by that app when its tunnel is up; this
+layer only resolves names/addresses and reports clear UX states.
+
+**Honest contract status:** no ContentProvider / Intent / Broadcast contract from
+Victorious Mesh was confirmed at implementation time. Interface-name heuristics
+are labelled `[Guessing]` in code; CGNAT/MagicDNS conventions `[Likely]`; TCP
+probe + host classification `[Certain]`. Follow-up: coordinate with the
+Victorious Mesh agent for a published status contract.
+
+No new third-party dependencies.
 
 ## Browser shell
 
