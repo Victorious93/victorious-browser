@@ -39,6 +39,15 @@ object CaptureStore {
         _exchanges.value = list.toList()
     }
 
+    /**
+     * Replace the entire history list (used when intercept edits change val fields
+     * on a recorded exchange). Still capped at [MAX_ENTRIES].
+     */
+    @Synchronized
+    fun replaceAll(exchanges: List<CapturedExchange>) {
+        _exchanges.value = exchanges.takeLast(MAX_ENTRIES)
+    }
+
     @Synchronized
     fun clear() {
         _exchanges.value = emptyList()

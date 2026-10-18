@@ -39,7 +39,8 @@ import com.victorious.browser.ui.theme.NeonMagenta
 
 /**
  * Compose "Network / History" screen: list of captured entries, detail view
- * (headers, decoded JWT, cookies), and an on/off switch for the inspection proxy.
+ * (headers, decoded JWT, cookies), proxy on/off, intercept toggle, and entry
+ * into Modify / Replay.
  *
  * The Switch is the local UI; the fleet bridge also toggles via browser.proxy.set.
  */
@@ -51,7 +52,23 @@ fun NetworkHistoryScreen(
     val context = LocalContext.current
     val exchanges by CaptureStore.exchanges.collectAsState()
     val proxyOn by LocalProxyService.isRunning.collectAsState()
+    val interceptOn by InterceptController.enabled.collectAsState()
+    val pendingIntercept by InterceptController.pending.collectAsState()
     var selected by remember { mutableStateOf<CapturedExchange?>(null) }
+    var modifySeed by remember { mutableStateOf<CapturedExchange?>(null) }
+    var showModify by remember { mutableStateOf(false) }
+
+    if (showModify) {
+        ModifyReplayScreen(
+            seedExchange = modifySeed,
+            onBack = {
+                showModify = false
+                modifySeed = null
+            },
+            modifier = modifier,
+        )
+        return
+    }
 
     Column(
         modifier = modifier
@@ -73,13 +90,12 @@ fun NetworkHistoryScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // Proxy on/off — local UI; bridge uses LocalProxyService.start/stop too.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column(Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text("Inspection proxy", style = MaterialTheme.typography.titleSmall)
                 Text(
                     if (proxyOn) "127.0.0.1:${LocalProxyService.port} (localhost only, no VpnService)"
@@ -105,6 +121,35 @@ fun NetworkHistoryScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Intercept (modify)", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    when {
+                        pendingIntercept != null ->
+                            "Paused #${pendingIntercept!!.exchangeId} — open Modify / Replay"
+                        interceptOn -> "ON — in-flight requests pause for edit"
+                        else -> "Off"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = interceptOn,
+                onCheckedChange = { on ->
+                    if (on && !proxyOn) {
+                        Toast.makeText(context, "Enable the inspection proxy first", Toast.LENGTH_LONG).show()
+                    }
+                    InterceptController.setEnabled(on)
+                },
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Button(onClick = { CaptureStore.clear() }) { Text("Clear") }
@@ -115,14 +160,27 @@ fun NetworkHistoryScreen(
                 },
                 enabled = exchanges.isNotEmpty(),
             ) { Text("Export JSON") }
+            Button(
+                onClick = {
+                    modifySeed = null
+                    showModify = true
+                },
+            ) { Text("Modify / Replay") }
         }
 
         Spacer(Modifier.height(8.dp))
         HorizontalDivider()
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier.height(8.dp))
 
         if (selected != null) {
-            DetailView(selected!!) { selected = null }
+            DetailView(
+                ex = selected!!,
+                onBack = { selected = null },
+                onEditReplay = {
+                    modifySeed = selected
+                    showModify = true
+                },
+            )
         } else {
             if (exchanges.isEmpty()) {
                 Text(
@@ -150,8 +208,8 @@ private fun ExchangeRow(ex: CapturedExchange, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Column(Modifier.padding(10.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("${ex.method} ${ex.statusCode ?: "…"}", color = NeonCyan, style = MaterialTheme.typography.labelLarge)
                 Text(
                     "${ex.responseBytes} B · ${ex.durationMs ?: "—"} ms",
@@ -172,18 +230,33 @@ private fun ExchangeRow(ex: CapturedExchange, onClick: () -> Unit) {
 }
 
 @Composable
-private fun DetailView(ex: CapturedExchange, onBack: () -> Unit) {
+private fun DetailView(
+    ex: CapturedExchange,
+    onBack: () -> Unit,
+    onEditReplay: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
-        TextButton(onClick = onBack) { Text("← List", color = NeonCyan) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack) { Text("← List", color = NeonCyan) }
+            Button(onClick = onEditReplay) { Text("Edit & Replay") }
+        }
         Section("Request") {
             Mono("${ex.method} ${ex.url}")
             Mono("Host: ${ex.host}")
             Mono("Started: ${ex.requestStartedAt}")
             Mono("Request bytes: ${ex.requestBytes}")
+            val reqBody = ex.requestBody
+            if (reqBody != null && reqBody.isNotEmpty()) {
+                Mono("Body:\n${reqBody.toString(Charsets.UTF_8).take(8_192)}")
+            }
         }
         Section("Response") {
             Mono("Status: ${ex.statusCode ?: "—"}")
@@ -222,7 +295,7 @@ private fun DetailView(ex: CapturedExchange, onBack: () -> Unit) {
 private fun Section(title: String, content: @Composable () -> Unit) {
     Spacer(Modifier.height(10.dp))
     Text(title, style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
-    Spacer(Modifier.height(4.dp))
+    Spacer(modifier.height(4.dp))
     content()
 }
 
