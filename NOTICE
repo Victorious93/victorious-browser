@@ -17,6 +17,38 @@ License: Apache License 2.0
 https://www.apache.org/licenses/LICENSE-2.0
 
 -----------------------------------------------------------------------------
+LittleProxy (xyz.rogfam:littleproxy) — actively-maintained fork
+Copyright The LittleProxy project contributors
+License: Apache License 2.0
+https://github.com/LittleProxy/LittleProxy
+https://www.apache.org/licenses/LICENSE-2.0
+
+Used as the on-device localhost HTTP(S) inspection proxy core. Bound to
+127.0.0.1 only; does NOT use Android VpnService.
+
+-----------------------------------------------------------------------------
+Bouncy Castle (org.bouncycastle:bcpkix-jdk18on, org.bouncycastle:bcprov-jdk18on)
+Copyright (c) The Legion of the Bouncy Castle Inc.
+License: Bouncy Castle Licence (MIT-style / ~MIT)
+https://www.bouncycastle.org/licence.html
+https://www.bouncycastle.org/
+
+Used to generate the local inspection root and per-host leaf certificates for
+TLS inspection of this app's OWN in-app WebView traffic. The root is trusted
+only within this app via network_security_config; it is never installed
+system-wide.
+
+-----------------------------------------------------------------------------
+Netty (transitive via LittleProxy: io.netty:netty-all)
+Copyright The Netty Project
+License: Apache License 2.0
+https://netty.io/
+https://www.apache.org/licenses/LICENSE-2.0
+
+On Android ART the proxy forces Netty's NIO transport (TransportProtocol.TCP);
+native epoll is not available and is not used.
+
+-----------------------------------------------------------------------------
 Patterns note — Lightning Browser
 This project draws on navigation / WebViewClient patterns observed in
 Lightning Browser (https://github.com/anthonycr/Lightning-Browser).
@@ -24,8 +56,3 @@ Lightning Browser is licensed under the Mozilla Public License 2.0 (MPL-2.0).
 No Lightning Browser source files are copied verbatim into this repository;
 this notice acknowledges conceptual inspiration only.
 https://www.mozilla.org/en-US/MPL/2.0/
-
------------------------------------------------------------------------------
-Shell engine and intercepting-proxy library picks beyond system WebView +
-androidx.webkit are pending approval; additional attributions will be added here
-when those dependencies land.

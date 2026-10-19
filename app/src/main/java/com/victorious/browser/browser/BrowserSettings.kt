@@ -6,6 +6,7 @@ import android.webkit.CookieManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.webkit.WebViewFeature
+import com.victorious.browser.inspect.LocalProxyService
 
 /**
  * Applies recon-oriented WebView defaults.
@@ -44,15 +45,20 @@ fun applyVictoriousWebSettings(webView: WebView, desktopUserAgent: Boolean) {
     CookieManager.getInstance().setAcceptCookie(true)
     CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
-    // TODO(proxy): Attach the local intercepting proxy here via androidx.webkit
-    // ProxyController once the proxy library pick is approved. Feature-gate with
-    // WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE) before calling
-    // ProxyController.getInstance().setProxyOverride(...). Do not implement the proxy
-    // in the browser-shell PR — this is the intentional hook point.
+    // ProxyController wiring. The local inspection proxy (LocalProxyService) owns
+    // setProxyOverride / clearProxyOverride when the developer toggles it on the
+    // Network / History screen. Here we only confirm the feature gate is available;
+    // the actual override is applied by LocalProxyService.start/stop so it stays
+    // in sync with the localhost listener lifecycle.
+    //
+    // Historical hook: TODO(proxy) from the webview-shell layer — now implemented
+    // via LocalProxyService + androidx.webkit ProxyController.
     if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
-        // Intentionally empty — reserved for ProxyController integration.
+        // No-op here: LocalProxyService applies/clears the override when running.
+        // If the proxy is already up (e.g. settings re-applied after UA toggle),
+        // the existing override remains in effect.
         @Suppress("UNUSED_VARIABLE")
-        val proxyHookReady = true
+        val proxyAlreadyRunning = LocalProxyService.isRunning.value
     }
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

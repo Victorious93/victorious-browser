@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  App-scoped trust for the local inspection root ONLY.
+  This does NOT install a system/device-wide certificate (that needs root and
+  is out of scope). Only this app trusts the local CA; other apps are unaffected.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- Platform CAs for ordinary HTTPS destinations -->
+            <certificates src="system" />
+            <!-- Local inspection root — app-only trust -->
+            <certificates src="@raw/inspect_root" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

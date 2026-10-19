@@ -14,6 +14,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        multiDexEnabled = true
     }
 
     signingConfigs {
@@ -48,6 +49,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -63,6 +65,16 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Netty / BouncyCastle ship metadata that collides when merged.
+            excludes += "/META-INF/io.netty.versions.properties"
+            excludes += "/META-INF/INDEX.LIST"
+            excludes += "/META-INF/*.SF"
+            excludes += "/META-INF/*.DSA"
+            excludes += "/META-INF/*.RSA"
+            excludes += "/META-INF/native-image/**"
+            excludes += "/META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            pickFirsts += "/META-INF/MANIFEST.MF"
+            pickFirsts += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
         }
     }
 }
@@ -78,4 +90,10 @@ dependencies {
     implementation(libs.androidx.material3)
     debugImplementation(libs.androidx.ui.tooling)
     implementation(libs.androidx.webkit)
+
+    // Network inspection layer (localhost proxy + local MITM certs)
+    implementation(libs.littleproxy)
+    implementation(libs.bouncycastle.bcpkix)
+    implementation(libs.bouncycastle.bcprov)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }
