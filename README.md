@@ -90,7 +90,7 @@ own locally-hosted / fleet web dashboards and opens them in the in-app WebView.
 ## Lite Apps
 
 Tap **Pin** on a panel card to pin it to the launcher as a Lite App: a chrome-less
-single-panel browser (back / forward / reload / Night only) in its own task, so it
+single-panel browser (back / forward / reload / Night / Reader only) in its own task, so it
 shows up as a separate app in Recents. Shortcuts carry only the panel id; the URL is
 read from `PanelStore` at launch. `LiteAppActivity` is not exported.
 
@@ -106,6 +106,8 @@ The browsing surface is a single system **WebView** hosted in Jetpack Compose vi
 - Optional Desktop / Mobile UA toggle
 - **Night** chip: dark rendering for any site via `androidx.webkit` algorithmic darkening
   (falls back to force-dark on older WebViews); persisted across launches
+- `androidx.webkit` `ProxyController` routes the WebView through the local
+  inspection proxy when enabled (see below)
 
 ### Content blocker
 
@@ -116,8 +118,52 @@ works either way. A blocked request is still recorded in capture history, marked
 `BLOCKED`, never silently dropped — the blocker must not hide traffic from the
 inspection tool it shares a code path with. The bundled host list (`ContentBlocker`)
 is a small illustrative sample, not a maintained blocklist.
-- `androidx.webkit` `ProxyController` routes the WebView through the local
-  inspection proxy when enabled (see below)
+
+### User scripts
+
+Per-site JavaScript, managed from the **Scripts** button in the browser chrome
+(hidden in Lite App mode). Each script has a name, a host pattern (`example.com`
+or `*.example.com`, subdomain-inclusive either way), and a body. Injected via
+`WebViewCompat.addDocumentStartJavaScript` where the device's WebView supports it
+(`WebViewFeature.DOCUMENT_START_SCRIPT`) — scoped to origin-match rules built from
+the host pattern, so it runs before the page's own scripts. Falls back to
+`evaluateJavascript` in `onPageStarted` on older WebViews; that path runs after the
+page has already started, so a script relying on running first can be too late.
+Document-start scripts are installed once when the browser screen's WebView is
+created — a script added or edited while that screen stays open takes effect on
+the next time it's recreated, not immediately.
+
+### Reader mode
+
+**Reader** chip in the browser chrome (available in Lite App mode too). Runs
+[Mozilla's Readability.js](https://github.com/mozilla/readability) (Apache-2.0,
+vendored verbatim at `assets/readability.js`) inside the page's own WebView via
+`evaluateJavascript` against a cloned `document`, so the live page is untouched
+even if extraction fails. The extracted HTML is passed through this app's own
+sanitizer (`ReaderMode.sanitizeContentHtml` — strips `<script>`/`<style>`/
+`<iframe>`/`<object>`/`<embed>`, inline event handlers, and `javascript:` URLs)
+before being rendered back with `loadDataWithBaseURL`, because Readability
+extracts content, it doesn't guarantee it's free of the source page's own script
+tags, and this WebView still carries that page's cookies. If no article is found,
+a toast says so and the chip doesn't flip. Tapping a link inside the rendered
+article exits reader mode (it's a real navigation, not the article anymore).
+
+### Sandboxes
+
+**Sandboxes** button on the launcher opens a list of named sandboxes — isolated
+containers for separating accounts, backed directly by `androidx.webkit`'s WebView
+Profile API (`ProfileStore` / `WebViewCompat.setProfile`), gated by
+`WebViewFeature.MULTI_PROFILE`. Each sandbox is its own Chromium profile: separate
+cookies, storage, geolocation permissions, service workers. There's no separate
+local store for sandboxes — a sandbox "exists" exactly when `ProfileStore` says so.
+A profile is assigned to a WebView once, immediately after it's created and before
+any navigation; it can't be reassigned mid-session, so sandboxes are chosen when
+opening a browser tab, not toggled while browsing. Deleting a sandbox that's still
+assigned to an open tab fails with a toast rather than succeeding destructively.
+On a WebView that doesn't support multiple profiles, everything falls back to the
+one shared default profile — no isolation, but no crash either. **This is the
+least-verified feature in the app**: the Profile API's behavior here is read from
+its decompiled method signatures, not exercised on a real device.
 
 ## Network inspection
 

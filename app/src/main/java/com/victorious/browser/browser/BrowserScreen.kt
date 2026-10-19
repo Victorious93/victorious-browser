@@ -2,6 +2,7 @@ package com.victorious.browser.browser
 
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -40,8 +41,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.victorious.browser.reader.ReaderModeController
+import com.victorious.browser.sandbox.SandboxManager
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
+import com.victorious.browser.userscript.UserScriptInjector
+import com.victorious.browser.userscript.UserScriptStore
 
 private const val HOME_URL = "https://example.com"
 
@@ -49,9 +54,13 @@ private const val HOME_URL = "https://example.com"
 fun BrowserScreen(
     initialUrl: String = HOME_URL,
     onOpenNetwork: () -> Unit = {},
+    onOpenScripts: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
     /** Lite App mode: no title strip, address bar, UA/Network controls. */
     liteMode: Boolean = false,
+    /** Sandbox (androidx.webkit Profile) to isolate this WebView's cookies/storage into.
+     *  Applied once, before the first navigation — see [SandboxManager.applyToNewWebView]. */
+    sandboxName: String? = null,
     modifier: Modifier = Modifier,
 ) {
     var urlBarText by remember { mutableStateOf(initialUrl) }
@@ -64,8 +73,10 @@ fun BrowserScreen(
     var desktopUa by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     val focusManager = LocalFocusManager.current
-    val nightSettings = NightModeSettings.get(LocalContext.current)
+    val appContext = LocalContext.current
+    val nightSettings = NightModeSettings.get(appContext)
     val nightMode by nightSettings.enabled.collectAsState()
+    var readerMode by remember { mutableStateOf(false) }
 
     fun syncNav(wv: WebView?) {
         canGoBack = wv?.canGoBack() == true
@@ -95,16 +106,28 @@ fun BrowserScreen(
     ) {
         if (!liteMode) {
             // Title strip
-            Text(
-                text = pageTitle,
-                style = MaterialTheme.typography.labelLarge,
-                color = NeonMagenta,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = pageTitle,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NeonMagenta,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (sandboxName != null) {
+                    Text(
+                        text = "[$sandboxName]",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NeonCyan,
+                    )
+                }
+            }
 
             // Address bar + Go
             Row(
@@ -194,6 +217,31 @@ fun BrowserScreen(
                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
+            Spacer(Modifier.width(4.dp))
+            FilterChip(
+                selected = readerMode,
+                onClick = {
+                    val wv = webViewRef ?: return@FilterChip
+                    if (readerMode) {
+                        readerMode = false
+                        wv.loadUrl(currentUrl)
+                    } else {
+                        ReaderModeController.enter(wv, nightMode) { found ->
+                            if (found) {
+                                readerMode = true
+                            } else {
+                                Toast.makeText(appContext, "Reader mode isn't available for this page", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                label = { Text("Reader") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
+                    selectedLabelColor = NeonCyan,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
             if (!liteMode) {
                 Spacer(Modifier.width(4.dp))
                 if (onBackToLauncher != null) {
@@ -209,6 +257,12 @@ fun BrowserScreen(
                     colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
                 ) {
                     Text("Network")
+                }
+                TextButton(
+                    onClick = onOpenScripts,
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+                ) {
+                    Text("Scripts")
                 }
             }
         }
@@ -229,14 +283,28 @@ fun BrowserScreen(
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
+                    // Must happen before any navigation — the Profile API doesn't
+                    // support reassigning a profile mid-session. No-ops onto the
+                    // default (unsandboxed) profile when sandboxName is null, invalid,
+                    // or the device's WebView doesn't support multiple profiles.
+                    SandboxManager.applyToNewWebView(this, sandboxName)
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     applyVictoriousWebSettings(this, desktopUa)
                     applyNightMode(this, nightMode)
+                    // Document-start injection is scoped to this WebView instance;
+                    // scripts added/edited afterward need a fresh WebView (see
+                    // UserScriptInjector's doc). Fallback path (onPageStarted) always
+                    // reads the live store, so it stays current even without recreation.
+                    UserScriptInjector.installAll(this, UserScriptStore.get(context).scripts.value)
                     webViewClient = VictoriousWebViewClient(
                         onUrlChanged = { url ->
+                            // A real navigation away from the rendered article (e.g. a
+                            // link tapped inside it) lands here with a different URL —
+                            // exit reader mode so its chip doesn't lie about page state.
+                            if (readerMode && url != currentUrl) readerMode = false
                             currentUrl = url
                             urlBarText = url
                             syncNav(this)
