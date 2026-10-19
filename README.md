@@ -15,6 +15,8 @@ for the developer's own traffic.
   (landed on `feature/fleet-panel-launcher`)
 - **Fleet control bridge** — bound Messenger IPC for the owner's controller
   (landed on `feature/fleet-bridge`)
+- **Proxy modify-and-replay** — Burp-lite intercept / edit / replay
+  (landed on `feature/proxy-modify-replay`)
 
 ## Fleet control bridge
 
@@ -129,8 +131,9 @@ use on the owner's own devices.
 
 - History of method, URL, host, status, timestamps, byte sizes, headers
 - Persisted in an in-memory `CaptureStore` (`StateFlow`, capped) — a simple local
-  store; Room can replace it later without a model change. Bodies are modeled
-  as nullable placeholders for a later depth pass
+  store; Room can replace it later without a model change. Request bodies are
+  captured when aggregated by the proxy (capped); response bodies fill on
+  direct replay
 - Helpers: surface cookies, detect `Authorization: Bearer`, decode JWT header /
   payload (base64 only — **no** signature checking)
 - Export captured entries to a JSON file under the app's external files
@@ -146,11 +149,24 @@ Compose **Network / History** screen (reachable from the browser chrome):
 - `TODO(control-bridge)` marks where a later control-bridge will toggle the proxy;
   that bridge is **not** built in this layer
 
+### Modify-and-replay (Burp-lite)
+
+Intercept in-flight HTTP(S) on the localhost proxy, edit method / URL / headers /
+body, then forward or drop. Replay any history entry with the same editor; when
+the proxy is running, replay is sent through `127.0.0.1:<port>` and recorded in
+`CaptureStore` (an internal marker skips the intercept gate so replay cannot
+deadlock the UI).
+
+- `InterceptController` — pause queue + Forward / Drop
+- `RequestEditMerge` — pure edit-merge / header parse / Content-Length sync
+- `ReplayClient` — rebuild + fire (`HttpURLConnection`)
+- Compose **Modify / Replay** screen from Network / History (also **Edit & Replay**
+  on a capture detail). Request bodies up to 256 KiB are aggregated for edit.
+
 ### Deferred
 
-- Control-bridge toggle
-- Modify-and-replay
-- Body capture depth (fields exist; not filled yet)
+- Control-bridge ops for intercept/replay
+- Deeper response-body capture UI
 
 ## Build
 
