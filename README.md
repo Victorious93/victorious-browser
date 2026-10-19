@@ -17,6 +17,8 @@ for the developer's own traffic.
   (landed on `feature/fleet-bridge`)
 - **Proxy modify-and-replay** — Burp-lite intercept / edit / replay
   (landed on `feature/proxy-modify-replay`)
+- **Deep capture** — full req/resp bodies, cookies+attrs, JWT decode,
+  searchable history (landed on `feature/deep-capture`)
 
 ## Fleet control bridge
 
@@ -129,25 +131,34 @@ use on the owner's own devices.
 
 ### Capture + helpers
 
-- History of method, URL, host, status, timestamps, byte sizes, headers
+- History of method, URL, host, status, timestamps, byte sizes, headers, and
+  **request + response bodies** (aggregated by LittleProxy, capped by
+  `CaptureConfig`, default 256 KiB, clampable 4 KiB–2 MiB)
+- Bodies tagged with Content-Type; text shown as UTF-8, binary as a hex preview;
+  truncation flagged when wire size exceeds the cap
 - Persisted in an in-memory `CaptureStore` (`StateFlow`, capped) — a simple local
-  store; Room can replace it later without a model change. Request bodies are
-  captured when aggregated by the proxy (capped); response bodies fill on
-  direct replay
-- Helpers: surface cookies, detect `Authorization: Bearer`, decode JWT header /
-  payload (base64 only — **no** signature checking)
-- Export captured entries to a JSON file under the app's external files
-  (`CaptureExporter`) for handoff to other first-party analysis tools
+  store; Room was **not** introduced (history is session-scoped inspection data)
+- Cookies: `Cookie` / `Set-Cookie` broken out into name / value / attributes
+  (`Path`, `Domain`, `Secure`, `HttpOnly`, `SameSite`, …)
+- JWT: detect bearer / JWT-looking tokens in `Authorization`, cookie values, and
+  textual bodies; decode header + payload (base64url) and surface claims.
+  **Signatures are never verified** — UI and export label results
+  `decoded-not-verified`
+- Searchable / filterable history (`HistoryFilter`): free-text search across URL,
+  headers, body text, cookies, and decoded JWT claims; filters for method,
+  status, content-type, host
+- Export captured entries (incl. body base64 + cookies + JWTs) to JSON under the
+  app's external files (`CaptureExporter`) for handoff to other first-party tools
 
 ### UI
 
 Compose **Network / History** screen (reachable from the browser chrome):
 
-- On/off switch for the inspection proxy
-- List + detail view (headers, cookies, decoded JWT)
-- Clear + Export JSON actions
-- `TODO(control-bridge)` marks where a later control-bridge will toggle the proxy;
-  that bridge is **not** built in this layer
+- On/off switch for the inspection proxy + intercept toggle
+- Search bar + optional filters (method / status / host / content-type)
+- List + deep detail view (bodies with content-type, cookies with attributes,
+  decoded-not-verified JWTs)
+- Clear + Export JSON + Modify / Replay actions
 
 ### Modify-and-replay (Burp-lite)
 
@@ -166,7 +177,7 @@ deadlock the UI).
 ### Deferred
 
 - Control-bridge ops for intercept/replay
-- Deeper response-body capture UI
+- UI control to change `CaptureConfig` body-size cap at runtime
 
 ## Build
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,11 +40,10 @@ import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
 
 /**
- * Compose "Network / History" screen: list of captured entries, detail view
- * (headers, decoded JWT, cookies), proxy on/off, intercept toggle, and entry
- * into Modify / Replay.
- *
- * The Switch is the local UI; the fleet bridge also toggles via browser.proxy.set.
+ * Compose "Network / History" screen: searchable/filterable list of captured
+ * entries, deep detail view (bodies with content-type, cookies with attributes,
+ * decoded-not-verified JWTs), proxy on/off, intercept toggle, and entry into
+ * Modify / Replay.
  */
 @Composable
 fun NetworkHistoryScreen(
@@ -57,6 +58,24 @@ fun NetworkHistoryScreen(
     var selected by remember { mutableStateOf<CapturedExchange?>(null) }
     var modifySeed by remember { mutableStateOf<CapturedExchange?>(null) }
     var showModify by remember { mutableStateOf(false) }
+
+    var searchQuery by remember { mutableStateOf("") }
+    var filterMethod by remember { mutableStateOf("") }
+    var filterStatus by remember { mutableStateOf("") }
+    var filterContentType by remember { mutableStateOf("") }
+    var filterHost by remember { mutableStateOf("") }
+    var showFilters by remember { mutableStateOf(false) }
+
+    val criteria = HistoryFilter.Criteria(
+        query = searchQuery,
+        method = filterMethod,
+        status = filterStatus,
+        contentType = filterContentType,
+        host = filterHost,
+    )
+    val filtered = remember(exchanges, criteria) {
+        HistoryFilter.apply(exchanges, criteria)
+    }
 
     if (showModify) {
         ModifyReplayScreen(
@@ -155,10 +174,10 @@ fun NetworkHistoryScreen(
             Button(onClick = { CaptureStore.clear() }) { Text("Clear") }
             Button(
                 onClick = {
-                    val file = CaptureExporter.writeToFile(context, exchanges)
+                    val file = CaptureExporter.writeToFile(context, filtered)
                     Toast.makeText(context, "Exported → ${file.absolutePath}", Toast.LENGTH_LONG).show()
                 },
-                enabled = exchanges.isNotEmpty(),
+                enabled = filtered.isNotEmpty(),
             ) { Text("Export JSON") }
             Button(
                 onClick = {
@@ -169,6 +188,27 @@ fun NetworkHistoryScreen(
         }
 
         Spacer(Modifier.height(8.dp))
+
+        if (selected == null) {
+            SearchFilterBar(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                showFilters = showFilters,
+                onToggleFilters = { showFilters = !showFilters },
+                method = filterMethod,
+                onMethodChange = { filterMethod = it },
+                status = filterStatus,
+                onStatusChange = { filterStatus = it },
+                contentType = filterContentType,
+                onContentTypeChange = { filterContentType = it },
+                host = filterHost,
+                onHostChange = { filterHost = it },
+                resultCount = filtered.size,
+                totalCount = exchanges.size,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -188,15 +228,97 @@ fun NetworkHistoryScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else if (filtered.isEmpty()) {
+                Text(
+                    "No matches for current search / filters.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(exchanges.asReversed(), key = { it.id }) { ex ->
+                    items(filtered.asReversed(), key = { it.id }) { ex ->
                         ExchangeRow(ex) { selected = ex }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun SearchFilterBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    showFilters: Boolean,
+    onToggleFilters: () -> Unit,
+    method: String,
+    onMethodChange: (String) -> Unit,
+    status: String,
+    onStatusChange: (String) -> Unit,
+    contentType: String,
+    onContentTypeChange: (String) -> Unit,
+    host: String,
+    onHostChange: (String) -> Unit,
+    resultCount: Int,
+    totalCount: Int,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Search URL / headers / body / JWT claims") },
+            placeholder = { Text("e.g. Authorization, sub=, application/json") },
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                "Showing $resultCount of $totalCount",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = onToggleFilters) {
+                Text(if (showFilters) "Hide filters" else "Filters", color = NeonCyan)
+            }
+        }
+        if (showFilters) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FilterField("Method", method, onMethodChange, Modifier.weight(1f))
+                FilterField("Status", status, onStatusChange, Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                FilterField("Host", host, onHostChange, Modifier.weight(1f))
+                FilterField("Content-Type", contentType, onContentTypeChange, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        modifier = modifier,
+        singleLine = true,
+        label = { Text(label) },
+    )
 }
 
 @Composable
@@ -224,7 +346,20 @@ private fun ExchangeRow(ex: CapturedExchange, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
             )
-            Text(ex.host, style = MaterialTheme.typography.labelSmall, color = NeonMagenta)
+            Row {
+                Text(ex.host, style = MaterialTheme.typography.labelSmall, color = NeonMagenta)
+                val ct = ex.responseContentType() ?: ex.requestContentType()
+                if (ct != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        ct.substringBefore(';').trim(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }
@@ -235,6 +370,26 @@ private fun DetailView(
     onBack: () -> Unit,
     onEditReplay: () -> Unit,
 ) {
+    val cookies = remember(ex) {
+        InspectHelpers.parseCookies(ex.requestHeaders + ex.responseHeaders)
+    }
+    val jwts = remember(ex) {
+        InspectHelpers.findJwts(
+            requestHeaders = ex.requestHeaders,
+            responseHeaders = ex.responseHeaders,
+            requestBody = ex.requestBody,
+            responseBody = ex.responseBody,
+            requestContentType = ex.requestContentType(),
+            responseContentType = ex.responseContentType(),
+        )
+    }
+    val reqPreview = remember(ex) {
+        InspectHelpers.bodyPreview(ex.requestBody, ex.requestContentType(), ex.requestBodyTruncated)
+    }
+    val resPreview = remember(ex) {
+        InspectHelpers.bodyPreview(ex.responseBody, ex.responseContentType(), ex.responseBodyTruncated)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -253,16 +408,14 @@ private fun DetailView(
             Mono("Host: ${ex.host}")
             Mono("Started: ${ex.requestStartedAt}")
             Mono("Request bytes: ${ex.requestBytes}")
-            val reqBody = ex.requestBody
-            if (reqBody != null && reqBody.isNotEmpty()) {
-                Mono("Body:\n${reqBody.toString(Charsets.UTF_8).take(8_192)}")
-            }
+            Mono("Content-Type: ${ex.requestContentType() ?: "(none)"}")
         }
         Section("Response") {
             Mono("Status: ${ex.statusCode ?: "—"}")
             Mono("Received: ${ex.responseReceivedAt ?: "—"}")
             Mono("Duration: ${ex.durationMs ?: "—"} ms")
             Mono("Response bytes: ${ex.responseBytes}")
+            Mono("Content-Type: ${ex.responseContentType() ?: "(none)"}")
         }
         Section("Request headers") {
             ex.requestHeaders.forEach { Mono("${it.name}: ${it.value}") }
@@ -273,21 +426,62 @@ private fun DetailView(
             if (ex.responseHeaders.isEmpty()) Mono("(none)")
         }
 
-        val cookies = InspectHelpers.cookies(ex.requestHeaders + ex.responseHeaders)
-        Section("Cookies") {
-            if (cookies.isEmpty()) Mono("(none)")
-            else cookies.forEach { Mono("${it.name} = ${it.value}") }
+        Section("Request body") {
+            BodySection(reqPreview)
+        }
+        Section("Response body") {
+            BodySection(resPreview)
         }
 
-        val bearer = InspectHelpers.bearerToken(ex.requestHeaders)
-        val jwt = InspectHelpers.decodeJwt(bearer)
-        Section("Authorization / JWT (base64 decode only — no signature check)") {
-            Mono("Bearer: ${bearer ?: "(none)"}")
-            if (jwt != null) {
-                Mono("JWT header:\n${jwt.header}")
-                Mono("JWT payload:\n${jwt.payload}")
+        Section("Cookies") {
+            if (cookies.isEmpty()) {
+                Mono("(none)")
+            } else {
+                cookies.forEach { c ->
+                    Mono("[${c.source}] ${c.name} = ${c.value}")
+                    if (c.attributes.isNotEmpty()) {
+                        c.attributes.forEach { (k, v) ->
+                            Mono(if (v.isEmpty()) "    $k" else "    $k = $v")
+                        }
+                    }
+                }
             }
         }
+
+        Section("JWT (decoded — NOT signature-verified)") {
+            if (jwts.isEmpty()) {
+                Mono("(none detected in Authorization / cookies / bodies)")
+            } else {
+                jwts.forEachIndexed { idx, jwt ->
+                    Mono("--- token ${idx + 1} from ${jwt.source} ---")
+                    Mono("signatureVerified: false (decoded-not-verified)")
+                    Mono("Header:\n${jwt.header ?: "(n/a)"}")
+                    Mono("Payload / claims:")
+                    if (jwt.claims.isNotEmpty()) {
+                        jwt.claims.forEach { (k, v) -> Mono("  $k = $v") }
+                    } else {
+                        Mono(jwt.payload ?: "(n/a)")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BodySection(preview: InspectHelpers.BodyPreview?) {
+    if (preview == null) {
+        Mono("(no body captured)")
+        return
+    }
+    Mono("Content-Type: ${preview.contentType ?: "(none)"}")
+    Mono("Bytes: ${preview.byteLength}${if (preview.truncated) " (truncated to capture cap)" else ""}")
+    if (preview.isText) {
+        Mono("Kind: text")
+        Mono(preview.text ?: "")
+    } else {
+        Mono("Kind: binary (hex preview)")
+        Mono(preview.hexPreview ?: "")
     }
 }
 
