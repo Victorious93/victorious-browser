@@ -4,7 +4,6 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -13,6 +12,7 @@ import androidx.compose.ui.Modifier
 import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.panels.PanelStore
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
+import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
 
 /**
  * Chrome-less host for a single panel, launched from a pinned shortcut. Runs in its
@@ -30,7 +30,7 @@ class LiteAppActivity : ComponentActivity() {
             return
         }
         title = panel.name
-        enableEdgeToEdge()
+        enableAlwaysDarkEdgeToEdge()
         setContent {
             VictoriousBrowserTheme {
                 Scaffold(
