@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -24,6 +23,7 @@ import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
+import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
 import com.victorious.browser.userscript.UserScriptsScreen
 import kotlinx.coroutines.flow.collectLatest
 
@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeOpenUrl(intent)
-        enableEdgeToEdge()
+        enableAlwaysDarkEdgeToEdge()
         setContent {
             VictoriousBrowserTheme {
                 VictoriousBrowserApp(

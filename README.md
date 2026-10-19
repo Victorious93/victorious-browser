@@ -299,6 +299,13 @@ Release signing is left to CI secrets — no release key is committed.
 ## Brand
 
 Dark charcoal UI with neon cyan (`#00E5FF`) → magenta (`#FF00E5`) accent ring theme.
+`VictoriousBrowserTheme` is a single, hardcoded dark `MaterialTheme` — there is no
+light variant and no toggle; the app is permanently dark by design.
+`enableAlwaysDarkEdgeToEdge()` (`ui/theme/EdgeToEdge.kt`), called from every
+Activity, forces light (white) status/navigation-bar icons unconditionally — the
+stock `enableEdgeToEdge()` instead follows the *device's* system day/night setting,
+which would otherwise mismatch this app's always-dark background on a phone set to
+system Light mode.
 
 ## Third-party licenses
 

@@ -1,6 +1,6 @@
 # Victorious Framework — Victorious Browser Living Guide
 
-Last updated: 2026-10-19 (live network access granted this session — corrected the virus-scan feature after real testing against both backends). This guide is updated whenever project state changes.
+Last updated: 2026-10-19 (fixed system-bar icon color for the always-dark theme). This guide is updated whenever project state changes.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
 ## 1. Current project status
@@ -14,10 +14,11 @@ Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, 
 | Proxy modify-and-replay | Finished |
 | Hermit-reference feature set (6 features) | Finished — merged to `main` |
 | URL tools + injection tools, URL changer | Finished — merged to `main` |
-| **Virus/malware scan — corrected after live testing** (this guide's current focus) | **In progress — landed on this branch** |
+| Virus/malware scan (corrected after live testing) | Finished — merged to `main` |
+| **System-bar icon fix for the always-dark theme** (this guide's current focus) | **In progress — landed on this branch** |
 
-Tally: Finished 8 (5 original + the completed Hermit-reference set + URL/injection tools/changer) · In Progress 1 (virus-scan correction) · Deferred 0 · Abandoned 0.
-[Certain] Everything compiles, `assembleDebug` succeeds and `testDebugUnitTest` passes (79 tests). [Certain] This session had real outbound network access to `urlhaus-api.abuse.ch` and `www.virustotal.com` (the environment's network policy was opened for it) — both APIs' unauthenticated-request error shapes were captured live via `curl` and used to fix a real bug (section 4.8). Neither has been called with a *valid* key, and no other feature in this guide has been run on a device. [Guessing] On-device/behavioral verification is still outstanding for everything else — see each item.
+Tally: Finished 9 (5 original + the completed Hermit-reference set + URL/injection tools/changer + corrected virus scan) · In Progress 1 (system-bar fix) · Deferred 0 · Abandoned 0.
+[Certain] Everything compiles, `assembleDebug` succeeds and `testDebugUnitTest` passes (79 tests, unchanged by this fix). [Certain] This repo had real outbound network access at one point (to `urlhaus-api.abuse.ch`/`www.virustotal.com`, opened specifically for that purpose) which is how the virus-scan auth-key bug (section 4.8) was found and fixed; that access is not assumed available for this or future sessions. [Guessing] On-device/behavioral verification — including whether this fix actually renders correctly — is still outstanding for everything in this guide; no emulator or device is available in this build environment.
 [Certain] Status above for the first five rows is taken from `README.md` and git history, not from a build or test run in this session.
 
 ## 2. Purpose of the Hermit-reference work
@@ -66,6 +67,20 @@ not a separate screen/destination) because `evaluateJavascript` needs the actual
 `WebView` instance — there was no reason to route this through `MainActivity`'s
 destination graph the way Scripts/Network do.
 
+### 3c. System-bar icon color (not a Hermit feature or a new screen — a theme-consistency fix)
+
+`VictoriousBrowserTheme` (`ui/theme/Theme.kt`) has always been a single, hardcoded
+`darkColorScheme` — there is no light variant, and no toggle. The app's UI is
+permanently dark by design. `MainActivity` and `LiteAppActivity` both called the
+bare `enableEdgeToEdge()`, whose default status/navigation-bar icon color follows
+the *device's* system day/night setting, not this app's actual (always-dark)
+content — so on a phone set to system Light mode, the bars would render dark icons
+over our charcoal background. `ui/theme/EdgeToEdge.kt`'s `enableAlwaysDarkEdgeToEdge()`
+forces light (white) system-bar icons unconditionally, called from both activities
+in place of the bare call. **Done** (compiles; the actual rendering is unverified — no
+device or emulator in this build environment, so this is reasoned from
+`androidx.activity`'s documented `SystemBarStyle` semantics, not observed).
+
 ## 4. Implementation decisions
 
 1. Hermit is a spec only; no Hermit code or assets are reused. [Certain]
@@ -97,11 +112,10 @@ destination graph the way Scripts/Network do.
 
 ## 6. Remaining work
 
-All six Hermit-reference features, URL/injection tools, the URL changer, and virus
-scanning are built — the last of these now corrected from a real test against the
-live APIs, not just compiled. What's genuinely left is on-device verification for
-everything, plus (for virus scan specifically) a run with an actual valid key for
-each backend, which this session never had. Night mode follow-ups: optional
+All six Hermit-reference features, URL/injection tools, the URL changer, virus
+scanning, and the always-dark system-bar fix are built. What's genuinely left is
+on-device verification for everything, plus (for virus scan specifically) a run
+with an actual valid key for each backend. Night mode follow-ups: optional
 per-panel override, bridge op.
 
 ## 7. Future improvements
@@ -116,6 +130,7 @@ per-panel override, bridge op.
 - URL tools: a self-hosted/alternate shortener option, since TinyURL's keyless endpoint has no uptime guarantee this app controls.
 - Injection tools: no history of what was run/injected (by design — these are one-off and not meant to be a second capture store); revisit if that proves useful.
 - Virus scan: no scan history either, same reasoning. Could add a third backend (e.g. Google Safe Browsing, also requires its own API key) behind the same "only call it if a key is set" pattern. A run with a real, valid key for each backend (never done this session) would confirm the "ok"/completed-analysis success paths, which are currently only unit-tested against hand-written JSON, not a captured real response.
+- A real light theme / theme toggle, if that's ever actually wanted — the app is currently permanently dark by design (no light `MaterialTheme`, no preference), and the system-bar fix in 3c assumes that stays true. If a light mode is ever added, `enableAlwaysDarkEdgeToEdge` needs to become theme-aware instead of unconditional.
 - **On-device verification pass across every feature in this guide** — this is the actual next step, not a new feature.
 
 ## 8. Artifacts generated
@@ -129,4 +144,5 @@ per-panel override, bridge op.
 - `sandbox/Sandbox.kt` (`SandboxName`), `SandboxManager.kt`, `SandboxesScreen.kt`, `SandboxNameTest.kt`
 - `urltools/UrlTools.kt`, `LinkShortener.kt`, `UrlToolsDialog.kt`, `UrlToolsTest.kt`, `LinkShortenerTest.kt`
 - `urltools/UrlScanner.kt`, `VirusTotalSettings.kt`, `UrlHausSettings.kt`, `UrlScannerTest.kt`
+- `ui/theme/EdgeToEdge.kt`
 - `inject/InjectionTools.kt`, `InjectionController.kt`, `InjectionDialog.kt`, `InjectionToolsTest.kt`
