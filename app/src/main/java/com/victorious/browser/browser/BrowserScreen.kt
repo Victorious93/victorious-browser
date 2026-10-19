@@ -41,10 +41,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.victorious.browser.inject.InjectionDialog
 import com.victorious.browser.reader.ReaderModeController
 import com.victorious.browser.sandbox.SandboxManager
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
+import com.victorious.browser.urltools.UrlToolsDialog
 import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.userscript.UserScriptStore
 
@@ -77,6 +79,8 @@ fun BrowserScreen(
     val nightSettings = NightModeSettings.get(appContext)
     val nightMode by nightSettings.enabled.collectAsState()
     var readerMode by remember { mutableStateOf(false) }
+    var showUrlTools by remember { mutableStateOf(false) }
+    var showInject by remember { mutableStateOf(false) }
 
     fun syncNav(wv: WebView?) {
         canGoBack = wv?.canGoBack() == true
@@ -264,6 +268,18 @@ fun BrowserScreen(
                 ) {
                     Text("Scripts")
                 }
+                TextButton(
+                    onClick = { showUrlTools = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+                ) {
+                    Text("URL")
+                }
+                TextButton(
+                    onClick = { showInject = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+                ) {
+                    Text("Inject")
+                }
             }
         }
 
@@ -334,6 +350,17 @@ fun BrowserScreen(
                 .fillMaxWidth()
                 .weight(1f),
         )
+    }
+
+    if (showUrlTools) {
+        UrlToolsDialog(
+            initialUrl = currentUrl,
+            onOpenUrl = { url -> navigateTo(url) },
+            onDismiss = { showUrlTools = false },
+        )
+    }
+    if (showInject) {
+        InjectionDialog(webView = webViewRef, onDismiss = { showInject = false })
     }
 }
 
