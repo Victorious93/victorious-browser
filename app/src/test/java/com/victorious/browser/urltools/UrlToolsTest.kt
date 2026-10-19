@@ -49,4 +49,34 @@ class UrlToolsTest {
     fun buildUrlWithNoParamsReturnsBareBase() {
         assertEquals("https://example.com/path", UrlTools.buildUrl("https://example.com/path?a=1", emptyList()))
     }
+
+    @Test
+    fun partsRoundTripThroughParseAndBuild() {
+        val url = "https://example.com:8443/a/b?x=1&y=2#frag"
+        val parts = UrlTools.parseParts(url)
+        assertEquals(
+            UrlTools.UrlParts("https", "example.com", 8443, "/a/b", "x=1&y=2", "frag"),
+            parts,
+        )
+        assertEquals(url, UrlTools.buildFromParts(parts!!))
+    }
+
+    @Test
+    fun parsePartsOmitsPortWhenAbsentAndRoundTripDoesNotInventOne() {
+        val parts = UrlTools.parseParts("https://example.com/path")
+        assertEquals(null, parts?.port)
+        assertEquals("https://example.com/path", UrlTools.buildFromParts(parts!!))
+    }
+
+    @Test
+    fun parsePartsReturnsNullForNonAbsoluteUrls() {
+        assertEquals(null, UrlTools.parseParts("not a url"))
+        assertEquals(null, UrlTools.parseParts("/just/a/path"))
+    }
+
+    @Test
+    fun buildFromPartsOmitsQueryAndFragmentWhenBlank() {
+        val parts = UrlTools.UrlParts("https", "example.com", null, "/p", "", "")
+        assertEquals("https://example.com/p", UrlTools.buildFromParts(parts))
+    }
 }

@@ -174,6 +174,26 @@ the one feature in the app that calls a public third-party HTTP endpoint rather 
 only the owner's own fleet traffic; `LinkShortener` treats any non-200 response, a
 blank body, or a body starting with `"Error"` as a failure rather than guessing.
 
+Also in the same dialog:
+
+- **URL changer** — a structured editor (scheme, host, port, path, query, fragment)
+  seeded from the current URL. "Rebuild URL" reassembles the parts and feeds the
+  same Copy/Open actions as the rest of the dialog. Round-trips cleanly: a URL with
+  no port stays without one; a bare host is invalid (needs a scheme and host to
+  parse at all).
+- **Virus / malware scan** — **URLhaus** (abuse.ch) runs automatically: free,
+  keyless, a database of known malware-distribution URLs. A hit means the URL is
+  specifically known-malicious; a miss means only "not in this database", not
+  "safe" — the result text says so rather than implying a clean bill of health.
+  **VirusTotal** is optional: paste your own API key into the field provided (saved
+  locally on-device, sent only to VirusTotal's own API as the `x-apikey` header,
+  nowhere else) and it runs alongside URLhaus on the next scan. VirusTotal analyses
+  are asynchronous — the app submits the URL and polls up to three times (a few
+  seconds apart) before reporting "still queued" rather than hanging; a queued
+  result isn't a failure, just try the scan again shortly. **Neither backend's
+  actual network call has been exercised in this session** — no network in the
+  build environment, and no VirusTotal key was available to test with at all.
+
 ### Injection tools
 
 **Inject** button in the browser chrome: run arbitrary JavaScript against the current
