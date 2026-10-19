@@ -51,7 +51,7 @@ Build order: night mode → Lite Apps → content blocker → user scripts → r
 
 ## 5. Maintenance procedures
 
-- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (not yet run for this work).
+- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; run for night mode, 25 tests pass).
 - Any new third-party library: add an entry to `NOTICE` with license and URL in the same commit.
 - Update this guide's status table and tally in the same commit as each feature lands.
 - Bridge protocol changes (new `browser.*` ops) require updating the README operations table and `BridgeCodecTest`.
