@@ -54,14 +54,14 @@ import java.util.UUID
  * Fleet Panels home screen — lists the owner's own locally-hosted / fleet web
  * dashboards and opens them in the in-app WebView.
  *
- * TODO(control-bridge): ops `browser.panel.list` / `browser.panel.open` will
- * read/drive [PanelStore]. Do NOT build the Messenger bridge in this layer.
+ * Fleet bridge ops `browser.panel.list` / `browser.panel.open` read/drive [PanelStore].
  */
 @Composable
 fun FleetPanelScreen(
     onOpenPanel: (Panel) -> Unit,
     onOpenNetwork: () -> Unit,
     onOpenBrowser: () -> Unit,
+    onOpenFleetControl: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -99,6 +99,9 @@ fun FleetPanelScreen(
                 color = NeonMagenta,
             )
             Row {
+                TextButton(onClick = onOpenFleetControl) {
+                    Text("Control", color = NeonMagenta)
+                }
                 TextButton(onClick = onOpenNetwork) {
                     Text("Network", color = NeonCyan)
                 }

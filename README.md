@@ -13,6 +13,55 @@ for the developer's own traffic.
   local CA (landed on `feature/intercept-proxy`)
 - **Fleet-panel launcher** — home screen for the owner's own dashboards
   (landed on `feature/fleet-panel-launcher`)
+- **Fleet control bridge** — bound Messenger IPC for the owner's controller
+  (landed on `feature/fleet-bridge`)
+- **Proxy modify-and-replay** — Burp-lite intercept / edit / replay
+  (landed on `feature/proxy-modify-replay`)
+
+## Fleet control bridge
+
+First-party inter-app automation: a bound **Messenger** service so the owner's
+OWN controller app (`ai.droidcommand.app`) can drive Victorious Browser on the
+owner's own devices (EXTERNAL_NODE class).
+
+### Protocol
+- Intent action: `com.victorious.browser.action.BRIDGE`
+- `Message.what` = `1` request / `2` response
+- Wire: newline-delimited JSON, `BRIDGE_PROTOCOL_MAJOR = 1`
+- Envelope: `BridgeRequest { id, op, params }` →
+  `BridgeResponse { id, ok, result?, error? }` with `error = { category, message }`
+
+### Security model
+1. **Caller identity** via `Message.sendingUid` (not `Binder.getCallingUid()`):
+   resolve packages for that uid and verify signing-cert SHA-256 against the
+   pinned DEBUG + RELEASE fleet-provided controller cert SHA-256 for package
+   `ai.droidcommand.app` only (no `ai.droidcommand.app.debug` pin — dropped by the fleet).
+   RELEASE pin verifies the CALLER; it is not this app's own signing key
+2. **External control** persisted switch — **OFF by default**; when off every
+   op is rejected with `not_paired`
+3. Envelope / parameter validity
+
+Check order on each request: identity → external-control switch → envelope.
+
+### Operations
+| op | params | result |
+|---|---|---|
+| `browser.capabilities.get` | `{}` | `{ protocol_major, package, node_id, operations, proxy_supported }` |
+| `browser.open_url` | `{ url }` | `{ status:"opened" }` |
+| `browser.panel.list` | `{}` | `{ panels:[{id,name,url,kind}] }` |
+| `browser.panel.open` | `{ panel_id }` | `{ status:"opened" }` |
+| `browser.recon.summary` | `{ limit?, since? }` | `{ count, entries:[{method,url,status,host,ts}] }` |
+| `browser.proxy.set` | `{ enabled:bool }` | fire-and-forget ack |
+| `browser.proxy.status` | `{}` | `{ running, port, ca_installed }` |
+
+Parameterless ops must receive exactly `{}` — non-empty params → `invalid_parameters`.
+
+Error categories: `invalid_parameters`, `not_paired`, `not_found`, `proxy_error`, `internal`.
+
+Node-id: generated/persisted on first run, matches `^browser-[0-9a-f]{32}$`.
+
+In-app **Fleet control** settings screen (from the launcher **Control** button):
+external-control switch, read-only node-id, pinned controller info.
 
 ## Fleet-panel launcher
 
@@ -82,8 +131,9 @@ use on the owner's own devices.
 
 - History of method, URL, host, status, timestamps, byte sizes, headers
 - Persisted in an in-memory `CaptureStore` (`StateFlow`, capped) — a simple local
-  store; Room can replace it later without a model change. Bodies are modeled
-  as nullable placeholders for a later depth pass
+  store; Room can replace it later without a model change. Request bodies are
+  captured when aggregated by the proxy (capped); response bodies fill on
+  direct replay
 - Helpers: surface cookies, detect `Authorization: Bearer`, decode JWT header /
   payload (base64 only — **no** signature checking)
 - Export captured entries to a JSON file under the app's external files
@@ -99,11 +149,24 @@ Compose **Network / History** screen (reachable from the browser chrome):
 - `TODO(control-bridge)` marks where a later control-bridge will toggle the proxy;
   that bridge is **not** built in this layer
 
+### Modify-and-replay (Burp-lite)
+
+Intercept in-flight HTTP(S) on the localhost proxy, edit method / URL / headers /
+body, then forward or drop. Replay any history entry with the same editor; when
+the proxy is running, replay is sent through `127.0.0.1:<port>` and recorded in
+`CaptureStore` (an internal marker skips the intercept gate so replay cannot
+deadlock the UI).
+
+- `InterceptController` — pause queue + Forward / Drop
+- `RequestEditMerge` — pure edit-merge / header parse / Content-Length sync
+- `ReplayClient` — rebuild + fire (`HttpURLConnection`)
+- Compose **Modify / Replay** screen from Network / History (also **Edit & Replay**
+  on a capture detail). Request bodies up to 256 KiB are aggregated for edit.
+
 ### Deferred
 
-- Control-bridge toggle
-- Modify-and-replay
-- Body capture depth (fields exist; not filled yet)
+- Control-bridge ops for intercept/replay
+- Deeper response-body capture UI
 
 ## Build
 

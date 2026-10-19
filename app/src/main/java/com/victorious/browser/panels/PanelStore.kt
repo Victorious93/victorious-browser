@@ -19,8 +19,7 @@ import java.util.UUID
  * localhost URLs — the owner configures real addresses; no credentials / private
  * IPs are invented here).
  *
- * TODO(control-bridge): `browser.panel.list` / `browser.panel.open` will read/drive
- * this store. Do NOT build the Messenger bridge now.
+ * Driven by the fleet control bridge ops `browser.panel.list` / `browser.panel.open`.
  */
 class PanelStore private constructor(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
