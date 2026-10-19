@@ -1,6 +1,6 @@
 # Victorious Framework — Victorious Browser Living Guide
 
-Last updated: 2026-10-19. This guide is updated whenever project state changes.
+Last updated: 2026-10-19 (night mode). This guide is updated whenever project state changes.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
 ## 1. Current project status
@@ -12,9 +12,10 @@ Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, 
 | Fleet-panel launcher | Finished |
 | Fleet control bridge (Messenger IPC) | Finished |
 | Proxy modify-and-replay | Finished |
-| **Hermit-reference feature set** (this guide's focus) | **Planned — no code written yet** |
+| **Hermit-reference feature set** (this guide's focus) | **In progress — night mode landed on this branch; 5 features planned** |
 
-Tally: Finished 5 · In Progress 0 · Deferred 0 · Abandoned 0 (+1 planned).
+Tally: Finished 5 · In Progress 1 (Hermit-reference set: 1 of 6 features done) · Deferred 0 · Abandoned 0.
+[Certain] Night mode compiles and `testDebugUnitTest` passes (25 tests). [Guessing] On-device visual behavior is unverified; algorithmic darkening needs WebView 114+ and a dark host theme (`Theme.VictoriousBrowser` is dark).
 [Certain] Status above for the first five rows is taken from `README.md` and git history, not from a build or test run in this session.
 
 ## 2. Purpose of the Hermit-reference work
@@ -32,7 +33,7 @@ Hermit (Chimbori's Lite Apps Browser) is used as a **behavioral feature spec**, 
 
 | Hermit feature | Existing hook in this repo | Planned implementation | Effort | Status |
 |---|---|---|---|---|
-| Night mode | `browser/BrowserSettings.kt` | `androidx.webkit` force-dark / algorithmic darkening, optional CSS injection | S | Planned |
+| Night mode | `browser/NightMode.kt`, `BrowserScreen.kt` | Algorithmic darkening, falling back to force-dark; persisted "Night" chip in the browser chrome. CSS injection not done. | S | **Done** (unit-tested strategy selection; not verified on a device) |
 | Lite Apps | `panels/Panel`, `PanelStore`, launcher | Pinned launcher shortcuts opening a panel in its own task, no address bar | S | Planned |
 | Content blocker | LittleProxy request path | Blocklist match in proxy + `shouldInterceptRequest` fallback; **log blocked requests as "blocked" in `CaptureStore`** | M | Planned |
 | User scripts | none | `WebViewCompat.addDocumentStartJavaScript`; per-site rules in a store modeled on `PanelStore` | M | Planned |
@@ -57,7 +58,7 @@ Build order: night mode → Lite Apps → content blocker → user scripts → r
 
 ## 6. Remaining work
 
-All six features in section 3. Nothing is implemented.
+Lite Apps, content blocker, user scripts, reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel override, bridge op.
 
 ## 7. Future improvements
 
@@ -69,3 +70,4 @@ All six features in section 3. Nothing is implemented.
 ## 8. Artifacts generated
 
 - `docs/VICTORIOUS_FRAMEWORK_GUIDE.md` (this file)
+- `NightMode.kt`, `NightModeTest.kt`

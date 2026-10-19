@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,6 +62,8 @@ fun BrowserScreen(
     var desktopUa by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     val focusManager = LocalFocusManager.current
+    val nightSettings = NightModeSettings.get(LocalContext.current)
+    val nightMode by nightSettings.enabled.collectAsState()
 
     fun syncNav(wv: WebView?) {
         canGoBack = wv?.canGoBack() == true
@@ -174,6 +178,17 @@ fun BrowserScreen(
                 ),
             )
             Spacer(Modifier.width(4.dp))
+            FilterChip(
+                selected = nightMode,
+                onClick = { nightSettings.setEnabled(!nightMode) },
+                label = { Text("Night") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = NeonMagenta.copy(alpha = 0.25f),
+                    selectedLabelColor = NeonMagenta,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+            Spacer(Modifier.width(4.dp))
             if (onBackToLauncher != null) {
                 TextButton(
                     onClick = onBackToLauncher,
@@ -211,6 +226,7 @@ fun BrowserScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     applyVictoriousWebSettings(this, desktopUa)
+                    applyNightMode(this, nightMode)
                     webViewClient = VictoriousWebViewClient(
                         onUrlChanged = { url ->
                             currentUrl = url
@@ -236,6 +252,7 @@ fun BrowserScreen(
             update = { wv ->
                 // Keep ref fresh across recompositions; do not recreate the WebView.
                 webViewRef = wv
+                applyNightMode(wv, nightMode)
             },
             modifier = Modifier
                 .fillMaxWidth()
