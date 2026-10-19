@@ -25,6 +25,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Lite Apps: chrome-less single-panel host launched from pinned shortcuts.
+             Not exported; each panel gets its own task (documentLaunchMode). -->
+        <activity
+            android:name=".liteapp.LiteAppActivity"
+            android:exported="false"
+            android:documentLaunchMode="intoExisting"
+            android:theme="@style/Theme.VictoriousBrowser"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout" />
+
         <!-- Fleet control bridge: first-party EXTERNAL_NODE Messenger IPC.
              Exported so the owner's controller app can bind; access is gated by
              sendingUid + signing-cert allowlist + external-control switch. -->

@@ -50,6 +50,8 @@ fun BrowserScreen(
     initialUrl: String = HOME_URL,
     onOpenNetwork: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
+    /** Lite App mode: no title strip, address bar, UA/Network controls. */
+    liteMode: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var urlBarText by remember { mutableStateOf(initialUrl) }
@@ -91,52 +93,54 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // Title strip
-        Text(
-            text = pageTitle,
-            style = MaterialTheme.typography.labelLarge,
-            color = NeonMagenta,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-        )
-
-        // Address bar + Go
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = urlBarText,
-                onValueChange = { urlBarText = it },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = NeonCyan,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    cursorColor = NeonCyan,
-                    focusedLabelColor = NeonCyan,
-                ),
-                label = { Text("URL") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Go,
-                ),
-                keyboardActions = KeyboardActions(onGo = { navigateTo(urlBarText) }),
+        if (!liteMode) {
+            // Title strip
+            Text(
+                text = pageTitle,
+                style = MaterialTheme.typography.labelLarge,
+                color = NeonMagenta,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
             )
-            Spacer(Modifier.width(6.dp))
-            TextButton(
-                onClick = { navigateTo(urlBarText) },
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+
+            // Address bar + Go
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Go")
+                OutlinedTextField(
+                    value = urlBarText,
+                    onValueChange = { urlBarText = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        cursorColor = NeonCyan,
+                        focusedLabelColor = NeonCyan,
+                    ),
+                    label = { Text("URL") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Go,
+                    ),
+                    keyboardActions = KeyboardActions(onGo = { navigateTo(urlBarText) }),
+                )
+                Spacer(Modifier.width(6.dp))
+                TextButton(
+                    onClick = { navigateTo(urlBarText) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+                ) {
+                    Text("Go")
+                }
             }
         }
 
@@ -159,25 +163,27 @@ fun BrowserScreen(
                 webViewRef?.reload()
             }
             Spacer(Modifier.weight(1f))
-            FilterChip(
-                selected = desktopUa,
-                onClick = {
-                    desktopUa = !desktopUa
-                    webViewRef?.let { wv ->
-                        applyVictoriousWebSettings(wv, desktopUa)
-                        wv.reload()
-                    }
-                },
-                label = {
-                    Text(if (desktopUa) "Desktop UA" else "Mobile UA")
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
-                    selectedLabelColor = NeonCyan,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-            Spacer(Modifier.width(4.dp))
+            if (!liteMode) {
+                FilterChip(
+                    selected = desktopUa,
+                    onClick = {
+                        desktopUa = !desktopUa
+                        webViewRef?.let { wv ->
+                            applyVictoriousWebSettings(wv, desktopUa)
+                            wv.reload()
+                        }
+                    },
+                    label = {
+                        Text(if (desktopUa) "Desktop UA" else "Mobile UA")
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
+                        selectedLabelColor = NeonCyan,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
             FilterChip(
                 selected = nightMode,
                 onClick = { nightSettings.setEnabled(!nightMode) },
@@ -188,20 +194,22 @@ fun BrowserScreen(
                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
-            Spacer(Modifier.width(4.dp))
-            if (onBackToLauncher != null) {
+            if (!liteMode) {
+                Spacer(Modifier.width(4.dp))
+                if (onBackToLauncher != null) {
+                    TextButton(
+                        onClick = onBackToLauncher,
+                        colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+                    ) {
+                        Text("Panels")
+                    }
+                }
                 TextButton(
-                    onClick = onBackToLauncher,
+                    onClick = onOpenNetwork,
                     colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
                 ) {
-                    Text("Panels")
+                    Text("Network")
                 }
-            }
-            TextButton(
-                onClick = onOpenNetwork,
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
-            ) {
-                Text("Network")
             }
         }
 

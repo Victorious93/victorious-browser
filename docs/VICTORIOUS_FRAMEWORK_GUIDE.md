@@ -1,6 +1,6 @@
 # Victorious Framework — Victorious Browser Living Guide
 
-Last updated: 2026-10-19 (night mode). This guide is updated whenever project state changes.
+Last updated: 2026-10-19 (Lite Apps). This guide is updated whenever project state changes.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
 ## 1. Current project status
@@ -12,10 +12,10 @@ Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, 
 | Fleet-panel launcher | Finished |
 | Fleet control bridge (Messenger IPC) | Finished |
 | Proxy modify-and-replay | Finished |
-| **Hermit-reference feature set** (this guide's focus) | **In progress — night mode landed on this branch; 5 features planned** |
+| **Hermit-reference feature set** (this guide's focus) | **In progress — night mode + Lite Apps landed on this branch; 4 features planned** |
 
-Tally: Finished 5 · In Progress 1 (Hermit-reference set: 1 of 6 features done) · Deferred 0 · Abandoned 0.
-[Certain] Night mode compiles and `testDebugUnitTest` passes (25 tests). [Guessing] On-device visual behavior is unverified; algorithmic darkening needs WebView 114+ and a dark host theme (`Theme.VictoriousBrowser` is dark).
+Tally: Finished 5 · In Progress 1 (Hermit-reference set: 2 of 6 features done) · Deferred 0 · Abandoned 0.
+[Certain] Night mode and Lite Apps compile, `assembleDebug` succeeds and `testDebugUnitTest` passes (28 tests). [Guessing] On-device visual behavior is unverified; algorithmic darkening needs WebView 114+ and a dark host theme (`Theme.VictoriousBrowser` is dark).
 [Certain] Status above for the first five rows is taken from `README.md` and git history, not from a build or test run in this session.
 
 ## 2. Purpose of the Hermit-reference work
@@ -34,7 +34,7 @@ Hermit (Chimbori's Lite Apps Browser) is used as a **behavioral feature spec**, 
 | Hermit feature | Existing hook in this repo | Planned implementation | Effort | Status |
 |---|---|---|---|---|
 | Night mode | `browser/NightMode.kt`, `BrowserScreen.kt` | Algorithmic darkening, falling back to force-dark; persisted "Night" chip in the browser chrome. CSS injection not done. | S | **Done** (unit-tested strategy selection; not verified on a device) |
-| Lite Apps | `panels/Panel`, `PanelStore`, launcher | Pinned launcher shortcuts opening a panel in its own task, no address bar | S | Planned |
+| Lite Apps | `panels/Panel`, `PanelStore`, launcher | Pinned launcher shortcuts opening a panel in its own task, no address bar | S | **Done** (`liteapp/`; unit-tested link parsing; not verified on a device) |
 | Content blocker | LittleProxy request path | Blocklist match in proxy + `shouldInterceptRequest` fallback; **log blocked requests as "blocked" in `CaptureStore`** | M | Planned |
 | User scripts | none | `WebViewCompat.addDocumentStartJavaScript`; per-site rules in a store modeled on `PanelStore` | M | Planned |
 | Reader mode | none | Inject Mozilla Readability.js (Apache-2.0), render result | S–M | Planned |
@@ -51,14 +51,16 @@ Build order: night mode → Lite Apps → content blocker → user scripts → r
 
 ## 5. Maintenance procedures
 
-- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; run for night mode, 25 tests pass).
+- Lite Apps: a shortcut stores only the panel id (`victorious-lite://panel/<id>`); the URL is resolved from `PanelStore` at launch, so editing a panel updates its shortcut and deleting it makes the shortcut show "Lite App no longer exists". `LiteAppActivity` is non-exported. Pinned shortcuts are not removed automatically when a panel is deleted.
+
+- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; 28 tests pass).
 - Any new third-party library: add an entry to `NOTICE` with license and URL in the same commit.
 - Update this guide's status table and tally in the same commit as each feature lands.
 - Bridge protocol changes (new `browser.*` ops) require updating the README operations table and `BridgeCodecTest`.
 
 ## 6. Remaining work
 
-Lite Apps, content blocker, user scripts, reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel override, bridge op.
+Content blocker, user scripts, reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel override, bridge op.
 
 ## 7. Future improvements
 
@@ -71,3 +73,4 @@ Lite Apps, content blocker, user scripts, reader mode, sandboxes (section 3). Ni
 
 - `docs/VICTORIOUS_FRAMEWORK_GUIDE.md` (this file)
 - `NightMode.kt`, `NightModeTest.kt`
+- `liteapp/LiteAppLinks.kt`, `LiteAppShortcuts.kt`, `LiteAppActivity.kt`, `LiteAppLinksTest.kt`

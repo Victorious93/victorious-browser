@@ -87,6 +87,13 @@ own locally-hosted / fleet web dashboards and opens them in the in-app WebView.
 - WebView opens when a panel is tapped; **Panels** returns to the launcher;
   Network / free Browser remain reachable from the chrome
 
+## Lite Apps
+
+Tap **Pin** on a panel card to pin it to the launcher as a Lite App: a chrome-less
+single-panel browser (back / forward / reload / Night only) in its own task, so it
+shows up as a separate app in Recents. Shortcuts carry only the panel id; the URL is
+read from `PanelStore` at launch. `LiteAppActivity` is not exported.
+
 ## Browser shell
 
 The browsing surface is a single system **WebView** hosted in Jetpack Compose via
