@@ -165,6 +165,27 @@ one shared default profile — no isolation, but no crash either. **This is the
 least-verified feature in the app**: the Profile API's behavior here is read from
 its decompiled method signatures, not exercised on a real device.
 
+### URL tools
+
+**URL** button in the browser chrome opens percent-encode/decode, a query-parameter
+view, and link shortening (via TinyURL's keyless `api-create.php` endpoint — no
+account, no key). Results can be copied or opened directly in the browser. This is
+the one feature in the app that calls a public third-party HTTP endpoint rather than
+only the owner's own fleet traffic; `LinkShortener` treats any non-200 response, a
+blank body, or a body starting with `"Error"` as a failure rather than guessing.
+
+### Injection tools
+
+**Inject** button in the browser chrome: run arbitrary JavaScript against the current
+page (`evaluateJavascript`, one-off, not persisted — unlike the **Scripts** feature,
+which reinstalls per matching host on every page load), or insert raw HTML at the end
+of `<body>`. Both operate on the page currently open in this browser — the same page
+the operator already navigated to, nothing more. HTML injection is **deliberately
+not sanitized** (unlike Reader mode's output): the point of the tool is seeing how
+the current page renders and sanitizes arbitrary markup, so stripping the input
+first would defeat it. Meant for testing the owner's own pages' handling of
+untrusted input, in the same spirit as the Burp-lite modify-and-replay tooling below.
+
 ## Network inspection
 
 Developer HTTP(S) inspection for traffic from **this app's own in-app WebView**
