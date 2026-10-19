@@ -10,20 +10,29 @@ import java.net.URL
 /**
  * URL reputation / malware checks before the operator opens a link.
  *
- * Two backends, both optional in the sense that a failure of one doesn't block the
- * other:
- * - **URLhaus** (abuse.ch) — free, keyless, no signup. A known-malware-URL database;
- *   a hit means the URL is specifically known as a malware distribution point, a
- *   miss means only "not in this one database", not "safe".
- * - **VirusTotal** — requires the operator's own API key (see [VirusTotalSettings]);
- *   not called when no key is set. Multi-engine URL/file reputation; submission +
- *   polling, since VirusTotal analyses are asynchronous.
+ * Two backends, both requiring the operator's own API key — **neither is keyless**.
+ * [checkUrlHaus] needs a URLhaus Auth-Key (free account at https://auth.abuse.ch/,
+ * see [UrlHausSettings]); [checkVirusTotal] needs a VirusTotal API key (see
+ * [VirusTotalSettings]). Neither is called when its key is blank. Both failing
+ * independently doesn't block the other.
  *
- * The network calls ([checkUrlHaus], [checkVirusTotal]) are not unit-tested (no
- * network in this project's test environment, and VirusTotal in particular has not
- * been exercised against the real API in this session at all — no key was available
- * to test with). [interpretUrlHausJson] and [interpretVirusTotalAnalysisJson] are the
- * pure, unit-tested response-parsing halves.
+ * [Certain, verified live in this session via `curl` against both real endpoints —
+ * not assumed]: as of this writing, URLhaus requires an `Auth-Key` header on every
+ * request (no key → HTTP 401 with a plain `{"error":"Unauthorized"}` body; a
+ * present-but-wrong key → HTTP 403 with `{"query_status":"unknown_auth_key"}`).
+ * An earlier version of this file and its docs claimed URLhaus was "free and
+ * keyless" — that was true once but is not true of the live API today, and this
+ * comment exists specifically so that claim doesn't silently drift back into being
+ * wrong. VirusTotal's unauthenticated response was also confirmed live: HTTP 401,
+ * `{"error":{"code":"AuthenticationRequiredError", ...}}`.
+ *
+ * [checkUrlHaus]'s and [checkVirusTotal]'s HTTP plumbing is still not unit-tested
+ * (no network in the Gradle test sandbox) and neither has been exercised live with
+ * a *valid* key — only the "no key" / "garbage key" error shapes have been verified
+ * against the real services. [interpretUrlHausJson] and
+ * [interpretVirusTotalAnalysisJson] are the pure, unit-tested response-parsing
+ * halves, and their "no results" / "unknown auth key" branches are built from the
+ * real bodies captured above, not guessed.
  */
 object UrlScanner {
     data class ScanVerdict(val source: String, val malicious: Boolean?, val detail: String)
@@ -38,9 +47,18 @@ object UrlScanner {
     private const val VT_ANALYSIS_ENDPOINT = "https://www.virustotal.com/api/v3/analyses/"
     private const val TIMEOUT_MS = 8_000
 
-    /** Interprets a URLhaus `/v1/url/` response body. Throws on malformed JSON (caught by [checkUrlHaus]). */
+    /**
+     * Interprets a URLhaus `/v1/url/` response body — including the two
+     * authentication-failure shapes abuse.ch actually returns (verified live, see
+     * this object's doc): a plain `{"error": "..."}` body (no `Auth-Key` header sent
+     * at all) and `{"query_status": "unknown_auth_key"}` (a key was sent but
+     * rejected). Throws on malformed JSON (caught by [checkUrlHaus]).
+     */
     fun interpretUrlHausJson(body: String): ScanVerdict {
         val json = JSONObject(body)
+        if (json.has("error")) {
+            return ScanVerdict("URLhaus", malicious = null, detail = "Auth-Key missing or rejected: ${json.optString("error")}")
+        }
         return when (val status = json.optString("query_status")) {
             "ok" -> {
                 val threat = json.optString("threat", "unknown")
@@ -48,6 +66,8 @@ object UrlScanner {
                 ScanVerdict("URLhaus", malicious = true, detail = "Listed as $threat ($urlStatus)")
             }
             "no_results" -> ScanVerdict("URLhaus", malicious = false, detail = "Not listed in URLhaus")
+            "unknown_auth_key" -> ScanVerdict("URLhaus", malicious = null, detail = "Auth-Key rejected — check the key in settings")
+            "missing_auth_key" -> ScanVerdict("URLhaus", malicious = null, detail = "Auth-Key required — add one in settings")
             else -> ScanVerdict("URLhaus", malicious = null, detail = "Lookup inconclusive: $status")
         }
     }
@@ -65,23 +85,28 @@ object UrlScanner {
         )
     }
 
-    suspend fun checkUrlHaus(url: String): Result<ScanVerdict> = withContext(Dispatchers.IO) {
+    /**
+     * Requires [authKey] (a free account at https://auth.abuse.ch/) — not called when
+     * blank, same as [checkVirusTotal]'s key requirement. A non-2xx response is still
+     * handed to [interpretUrlHausJson] rather than treated as an opaque failure: both
+     * of abuse.ch's auth-failure shapes are real JSON bodies worth surfacing (see this
+     * object's doc), not just an HTTP status code.
+     */
+    suspend fun checkUrlHaus(url: String, authKey: String): Result<ScanVerdict> = withContext(Dispatchers.IO) {
+        if (authKey.isBlank()) return@withContext Result.failure(IllegalArgumentException("No URLhaus Auth-Key set"))
         try {
             val connection = URL(URLHAUS_ENDPOINT).openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.doOutput = true
             connection.connectTimeout = TIMEOUT_MS
             connection.readTimeout = TIMEOUT_MS
+            connection.setRequestProperty("Auth-Key", authKey)
             connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
             connection.outputStream.use { it.write("url=${UrlTools.encode(url)}".toByteArray()) }
             val code = connection.responseCode
             val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
                 .bufferedReader().use { it.readText() }
-            if (code !in 200..299) {
-                Result.failure(IllegalStateException("URLhaus HTTP $code"))
-            } else {
-                Result.success(interpretUrlHausJson(body))
-            }
+            Result.success(interpretUrlHausJson(body))
         } catch (e: Exception) {
             Result.failure(e)
         }
