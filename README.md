@@ -106,6 +106,8 @@ The browsing surface is a single system **WebView** hosted in Jetpack Compose vi
 - Optional Desktop / Mobile UA toggle
 - **Night** chip: dark rendering for any site via `androidx.webkit` algorithmic darkening
   (falls back to force-dark on older WebViews); persisted across launches
+- `androidx.webkit` `ProxyController` routes the WebView through the local
+  inspection proxy when enabled (see below)
 
 ### Content blocker
 
@@ -145,8 +147,23 @@ extracts content, it doesn't guarantee it's free of the source page's own script
 tags, and this WebView still carries that page's cookies. If no article is found,
 a toast says so and the chip doesn't flip. Tapping a link inside the rendered
 article exits reader mode (it's a real navigation, not the article anymore).
-- `androidx.webkit` `ProxyController` routes the WebView through the local
-  inspection proxy when enabled (see below)
+
+### Sandboxes
+
+**Sandboxes** button on the launcher opens a list of named sandboxes — isolated
+containers for separating accounts, backed directly by `androidx.webkit`'s WebView
+Profile API (`ProfileStore` / `WebViewCompat.setProfile`), gated by
+`WebViewFeature.MULTI_PROFILE`. Each sandbox is its own Chromium profile: separate
+cookies, storage, geolocation permissions, service workers. There's no separate
+local store for sandboxes — a sandbox "exists" exactly when `ProfileStore` says so.
+A profile is assigned to a WebView once, immediately after it's created and before
+any navigation; it can't be reassigned mid-session, so sandboxes are chosen when
+opening a browser tab, not toggled while browsing. Deleting a sandbox that's still
+assigned to an open tab fails with a toast rather than succeeding destructively.
+On a WebView that doesn't support multiple profiles, everything falls back to the
+one shared default profile — no isolation, but no crash either. **This is the
+least-verified feature in the app**: the Profile API's behavior here is read from
+its decompiled method signatures, not exercised on a real device.
 
 ## Network inspection
 

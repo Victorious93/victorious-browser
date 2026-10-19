@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.victorious.browser.reader.ReaderModeController
+import com.victorious.browser.sandbox.SandboxManager
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
 import com.victorious.browser.userscript.UserScriptInjector
@@ -57,6 +58,9 @@ fun BrowserScreen(
     onBackToLauncher: (() -> Unit)? = null,
     /** Lite App mode: no title strip, address bar, UA/Network controls. */
     liteMode: Boolean = false,
+    /** Sandbox (androidx.webkit Profile) to isolate this WebView's cookies/storage into.
+     *  Applied once, before the first navigation — see [SandboxManager.applyToNewWebView]. */
+    sandboxName: String? = null,
     modifier: Modifier = Modifier,
 ) {
     var urlBarText by remember { mutableStateOf(initialUrl) }
@@ -102,16 +106,28 @@ fun BrowserScreen(
     ) {
         if (!liteMode) {
             // Title strip
-            Text(
-                text = pageTitle,
-                style = MaterialTheme.typography.labelLarge,
-                color = NeonMagenta,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = pageTitle,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NeonMagenta,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (sandboxName != null) {
+                    Text(
+                        text = "[$sandboxName]",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NeonCyan,
+                    )
+                }
+            }
 
             // Address bar + Go
             Row(
@@ -267,6 +283,11 @@ fun BrowserScreen(
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
+                    // Must happen before any navigation — the Profile API doesn't
+                    // support reassigning a profile mid-session. No-ops onto the
+                    // default (unsandboxed) profile when sandboxName is null, invalid,
+                    // or the device's WebView doesn't support multiple profiles.
+                    SandboxManager.applyToNewWebView(this, sandboxName)
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
