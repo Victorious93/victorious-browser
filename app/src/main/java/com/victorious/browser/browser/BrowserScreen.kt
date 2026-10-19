@@ -24,6 +24,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,6 +50,8 @@ fun BrowserScreen(
     initialUrl: String = HOME_URL,
     onOpenNetwork: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
+    /** Lite App mode: no title strip, address bar, UA/Network controls. */
+    liteMode: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var urlBarText by remember { mutableStateOf(initialUrl) }
@@ -60,6 +64,8 @@ fun BrowserScreen(
     var desktopUa by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     val focusManager = LocalFocusManager.current
+    val nightSettings = NightModeSettings.get(LocalContext.current)
+    val nightMode by nightSettings.enabled.collectAsState()
 
     fun syncNav(wv: WebView?) {
         canGoBack = wv?.canGoBack() == true
@@ -87,52 +93,54 @@ fun BrowserScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // Title strip
-        Text(
-            text = pageTitle,
-            style = MaterialTheme.typography.labelLarge,
-            color = NeonMagenta,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-        )
-
-        // Address bar + Go
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            OutlinedTextField(
-                value = urlBarText,
-                onValueChange = { urlBarText = it },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = NeonCyan,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    cursorColor = NeonCyan,
-                    focusedLabelColor = NeonCyan,
-                ),
-                label = { Text("URL") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Go,
-                ),
-                keyboardActions = KeyboardActions(onGo = { navigateTo(urlBarText) }),
+        if (!liteMode) {
+            // Title strip
+            Text(
+                text = pageTitle,
+                style = MaterialTheme.typography.labelLarge,
+                color = NeonMagenta,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
             )
-            Spacer(Modifier.width(6.dp))
-            TextButton(
-                onClick = { navigateTo(urlBarText) },
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+
+            // Address bar + Go
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Go")
+                OutlinedTextField(
+                    value = urlBarText,
+                    onValueChange = { urlBarText = it },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        cursorColor = NeonCyan,
+                        focusedLabelColor = NeonCyan,
+                    ),
+                    label = { Text("URL") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Go,
+                    ),
+                    keyboardActions = KeyboardActions(onGo = { navigateTo(urlBarText) }),
+                )
+                Spacer(Modifier.width(6.dp))
+                TextButton(
+                    onClick = { navigateTo(urlBarText) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+                ) {
+                    Text("Go")
+                }
             }
         }
 
@@ -155,38 +163,53 @@ fun BrowserScreen(
                 webViewRef?.reload()
             }
             Spacer(Modifier.weight(1f))
+            if (!liteMode) {
+                FilterChip(
+                    selected = desktopUa,
+                    onClick = {
+                        desktopUa = !desktopUa
+                        webViewRef?.let { wv ->
+                            applyVictoriousWebSettings(wv, desktopUa)
+                            wv.reload()
+                        }
+                    },
+                    label = {
+                        Text(if (desktopUa) "Desktop UA" else "Mobile UA")
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
+                        selectedLabelColor = NeonCyan,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                )
+                Spacer(Modifier.width(4.dp))
+            }
             FilterChip(
-                selected = desktopUa,
-                onClick = {
-                    desktopUa = !desktopUa
-                    webViewRef?.let { wv ->
-                        applyVictoriousWebSettings(wv, desktopUa)
-                        wv.reload()
-                    }
-                },
-                label = {
-                    Text(if (desktopUa) "Desktop UA" else "Mobile UA")
-                },
+                selected = nightMode,
+                onClick = { nightSettings.setEnabled(!nightMode) },
+                label = { Text("Night") },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
-                    selectedLabelColor = NeonCyan,
+                    selectedContainerColor = NeonMagenta.copy(alpha = 0.25f),
+                    selectedLabelColor = NeonMagenta,
                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
-            Spacer(Modifier.width(4.dp))
-            if (onBackToLauncher != null) {
+            if (!liteMode) {
+                Spacer(Modifier.width(4.dp))
+                if (onBackToLauncher != null) {
+                    TextButton(
+                        onClick = onBackToLauncher,
+                        colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+                    ) {
+                        Text("Panels")
+                    }
+                }
                 TextButton(
-                    onClick = onBackToLauncher,
+                    onClick = onOpenNetwork,
                     colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
                 ) {
-                    Text("Panels")
+                    Text("Network")
                 }
-            }
-            TextButton(
-                onClick = onOpenNetwork,
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
-            ) {
-                Text("Network")
             }
         }
 
@@ -211,6 +234,7 @@ fun BrowserScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
                     applyVictoriousWebSettings(this, desktopUa)
+                    applyNightMode(this, nightMode)
                     webViewClient = VictoriousWebViewClient(
                         onUrlChanged = { url ->
                             currentUrl = url
@@ -236,6 +260,7 @@ fun BrowserScreen(
             update = { wv ->
                 // Keep ref fresh across recompositions; do not recreate the WebView.
                 webViewRef = wv
+                applyNightMode(wv, nightMode)
             },
             modifier = Modifier
                 .fillMaxWidth()

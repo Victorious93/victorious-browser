@@ -87,6 +87,13 @@ own locally-hosted / fleet web dashboards and opens them in the in-app WebView.
 - WebView opens when a panel is tapped; **Panels** returns to the launcher;
   Network / free Browser remain reachable from the chrome
 
+## Lite Apps
+
+Tap **Pin** on a panel card to pin it to the launcher as a Lite App: a chrome-less
+single-panel browser (back / forward / reload / Night only) in its own task, so it
+shows up as a separate app in Recents. Shortcuts carry only the panel id; the URL is
+read from `PanelStore` at launch. `LiteAppActivity` is not exported.
+
 ## Browser shell
 
 The browsing surface is a single system **WebView** hosted in Jetpack Compose via
@@ -97,6 +104,18 @@ The browsing surface is a single system **WebView** hosted in Jetpack Compose vi
 - Recon-oriented defaults: JavaScript + DOM storage on, cookies via `CookieManager`,
   mixed content set to `MIXED_CONTENT_COMPATIBILITY_MODE` (noted in code)
 - Optional Desktop / Mobile UA toggle
+- **Night** chip: dark rendering for any site via `androidx.webkit` algorithmic darkening
+  (falls back to force-dark on older WebViews); persisted across launches
+
+### Content blocker
+
+Host-suffix blocking by category (adware & malware, coin miners, trackers, adult —
+toggle each from **Network / History**). Matches at the local proxy when it's
+running, and via `shouldInterceptRequest` on the WebView when it's not, so blocking
+works either way. A blocked request is still recorded in capture history, marked
+`BLOCKED`, never silently dropped — the blocker must not hide traffic from the
+inspection tool it shares a code path with. The bundled host list (`ContentBlocker`)
+is a small illustrative sample, not a maintained blocklist.
 - `androidx.webkit` `ProxyController` routes the WebView through the local
   inspection proxy when enabled (see below)
 

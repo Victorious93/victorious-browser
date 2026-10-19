@@ -17,12 +17,17 @@ import org.littleshoot.proxy.HttpFiltersSourceAdapter
  * Request aggregation is capped so [FullHttpRequest] bodies are available for
  * intercept edit and history replay without unbounded buffering.
  */
-class CaptureFiltersSource : HttpFiltersSourceAdapter() {
+class CaptureFiltersSource(
+    private val blockerSettings: ContentBlockerSettings,
+) : HttpFiltersSourceAdapter() {
 
     companion object {
         /** Cap for aggregated request bodies (intercept + capture). */
         const val MAX_REQUEST_BUFFER_BYTES = 256 * 1024
         const val MAX_RESPONSE_BUFFER_BYTES = 256 * 1024
+
+        /** Synthetic status recorded for a blocked exchange; no real server was contacted. */
+        const val BLOCKED_STATUS_CODE = -1
     }
 
     override fun getMaximumRequestBufferSizeInBytes(): Int = MAX_REQUEST_BUFFER_BYTES
@@ -41,8 +46,22 @@ class CaptureFiltersSource : HttpFiltersSourceAdapter() {
                 if (recorded || httpObject !is HttpRequest) return null
                 recorded = true
 
-                val exchange = toExchange(id, httpObject)
+                var exchange = toExchange(id, httpObject)
+
+                // Content blocker: match before recording so a blocked request is
+                // logged as blocked, never silently dropped from the capture history.
+                val blockedBy = ContentBlocker.isBlocked(
+                    exchange.host.substringBefore(':'),
+                    blockerSettings.activeCategories(),
+                )
+                if (blockedBy != null) {
+                    exchange = exchange.copy(blocked = blockedBy, statusCode = BLOCKED_STATUS_CODE)
+                }
                 CaptureStore.record(exchange)
+
+                if (blockedBy != null) {
+                    return NettyRequestApplier.blockedResponse(blockedBy)
+                }
 
                 // CONNECT establishes the tunnel; never park it for edit.
                 if (RequestEditMerge.isConnect(httpObject.method().name())) {
