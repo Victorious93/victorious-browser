@@ -7,11 +7,12 @@ import java.net.Socket
 import java.net.URI
 
 /**
- * Lightweight async reachability check: attempt a TCP connect to host:port with a
- * short timeout. Does not speak HTTP — just "is something listening".
+ * Lightweight async reachability check for *direct* (non-mesh) panels: attempt a
+ * TCP connect to host:port with a short timeout. Does not speak HTTP — just
+ * "is something listening".
  *
- * For panels flagged [Panel.reachOverMesh], this still does a plain TCP probe; real
- * mesh-path resolution is deferred (see TODO in [Panel]).
+ * Mesh-flagged panels use [MeshReachability] instead (host classification +
+ * tunnel signals + TCP probe → [MeshOpenDecision]).
  */
 object ReachabilityChecker {
     private const val TIMEOUT_MS = 1_500
