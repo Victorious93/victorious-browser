@@ -11,6 +11,32 @@ for the developer's own traffic.
 - **Shell engine** — system WebView via `AndroidView` (landed)
 - **Proxy / MITM library** — LittleProxy (localhost socket proxy) + BouncyCastle
   local CA (landed on `feature/intercept-proxy`)
+- **Fleet-panel launcher** — home screen for the owner's own dashboards
+  (landed on `feature/fleet-panel-launcher`)
+
+## Fleet-panel launcher
+
+The app starts on a **Fleet Panels** Compose home screen that lists the owner's
+own locally-hosted / fleet web dashboards and opens them in the in-app WebView.
+
+- Grid of panel cards: name, URL, kind tag (`LOCAL_HTTP`, `HEADSCALE_ADMIN`,
+  `METASPLOIT_WEB`, `KYC_AUDITLAB`, `OTHER`), and a reachability indicator
+  (lightweight TCP connect to host:port with a short timeout → up / down /
+  unknown)
+- Add / edit / delete panels from a simple form; persisted across launches via
+  SharedPreferences + JSON (`PanelStore` — simple local store, not Room)
+- Seeded once with editable DEFAULT panels (placeholder `127.0.0.1` URLs/ports —
+  the owner configures real addresses; no credentials or private IPs invented):
+  KYC-AuditLab, Headscale admin, Metasploit web console, Local HTTP tool template
+- **Mesh awareness (lightweight):** per-panel `reachOverMesh` flag + UI note that
+  mesh routing is provided by the separate Victorious Mesh app. No VPN/mesh
+  networking is implemented here — `TODO(mesh-reachability)` marks where that
+  will later resolve
+- `TODO(control-bridge)` marks where future ops `browser.panel.list` /
+  `browser.panel.open` will read/drive the store — Messenger bridge is **not**
+  built in this layer
+- WebView opens when a panel is tapped; **Panels** returns to the launcher;
+  Network / free Browser remain reachable from the chrome
 
 ## Browser shell
 

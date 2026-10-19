@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
+import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 
 class MainActivity : ComponentActivity() {
@@ -30,28 +31,40 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppDestination { Browser, Network }
+private sealed class AppDestination {
+    data object Launcher : AppDestination()
+    data class Browser(val url: String) : AppDestination()
+    data object Network : AppDestination()
+}
 
 @Composable
 fun VictoriousBrowserApp() {
-    var destination by remember { mutableStateOf(AppDestination.Browser) }
+    // Fleet Panels is the start screen; WebView opens when a panel is tapped.
+    var destination by remember { mutableStateOf<AppDestination>(AppDestination.Launcher) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
     ) { innerPadding ->
-        when (destination) {
-            AppDestination.Browser -> BrowserScreen(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+        val pad = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)
+        when (val dest = destination) {
+            AppDestination.Launcher -> FleetPanelScreen(
+                modifier = pad,
+                onOpenPanel = { panel -> destination = AppDestination.Browser(panel.url) },
                 onOpenNetwork = { destination = AppDestination.Network },
+                onOpenBrowser = { destination = AppDestination.Browser("https://example.com") },
+            )
+            is AppDestination.Browser -> BrowserScreen(
+                modifier = pad,
+                initialUrl = dest.url,
+                onOpenNetwork = { destination = AppDestination.Network },
+                onBackToLauncher = { destination = AppDestination.Launcher },
             )
             AppDestination.Network -> NetworkHistoryScreen(
-                onBack = { destination = AppDestination.Browser },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
             )
         }
     }
