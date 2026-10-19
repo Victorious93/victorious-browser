@@ -181,18 +181,23 @@ Also in the same dialog:
   same Copy/Open actions as the rest of the dialog. Round-trips cleanly: a URL with
   no port stays without one; a bare host is invalid (needs a scheme and host to
   parse at all).
-- **Virus / malware scan** — **URLhaus** (abuse.ch) runs automatically: free,
-  keyless, a database of known malware-distribution URLs. A hit means the URL is
-  specifically known-malicious; a miss means only "not in this database", not
-  "safe" — the result text says so rather than implying a clean bill of health.
-  **VirusTotal** is optional: paste your own API key into the field provided (saved
-  locally on-device, sent only to VirusTotal's own API as the `x-apikey` header,
-  nowhere else) and it runs alongside URLhaus on the next scan. VirusTotal analyses
-  are asynchronous — the app submits the URL and polls up to three times (a few
-  seconds apart) before reporting "still queued" rather than hanging; a queued
-  result isn't a failure, just try the scan again shortly. **Neither backend's
-  actual network call has been exercised in this session** — no network in the
-  build environment, and no VirusTotal key was available to test with at all.
+- **Virus / malware scan** — **URLhaus** (abuse.ch) and **VirusTotal**, both
+  checking the URL in the box above. **Both require your own free API key** —
+  neither is keyless, confirmed by calling both APIs live without one: URLhaus
+  answers HTTP 401, VirusTotal HTTP 401 with its own error shape, neither runs a
+  scan. Get a URLhaus Auth-Key at [auth.abuse.ch](https://auth.abuse.ch/) and a
+  VirusTotal key at [virustotal.com](https://www.virustotal.com/) (both free), paste
+  each into its field, hit **Save key**, then **Scan URL**. A backend with no key
+  saved is skipped and says so in the result rather than silently doing nothing. A
+  URLhaus hit means the URL is specifically known-malicious; a miss means only "not
+  in this database", not "safe" — the result text says so rather than implying a
+  clean bill of health. VirusTotal analyses are asynchronous — the app submits the
+  URL and polls up to three times (a few seconds apart) before reporting "still
+  queued" rather than hanging; a queued result isn't a failure, just scan again
+  shortly. Each key is saved locally on-device and sent only to its own API's auth
+  header, nowhere else. **Neither backend has been scanned with a real, valid key**
+  in this session — only the "no key" / "wrong key" error responses were confirmed
+  live.
 
 ### Injection tools
 

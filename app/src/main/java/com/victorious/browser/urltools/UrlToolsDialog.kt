@@ -68,6 +68,9 @@ fun UrlToolsDialog(
     val vtSettings = remember { VirusTotalSettings.get(context) }
     val vtKey by vtSettings.apiKey.collectAsState()
     var vtKeyInput by remember { mutableStateOf(vtKey) }
+    val urlHausSettings = remember { UrlHausSettings.get(context) }
+    val urlHausKey by urlHausSettings.authKey.collectAsState()
+    var urlHausKeyInput by remember { mutableStateOf(urlHausKey) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -154,15 +157,25 @@ fun UrlToolsDialog(
                 HorizontalDivider(Modifier.height(1.dp))
                 Text("Virus / malware scan", style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
                 Text(
-                    "URLhaus (abuse.ch) is free and keyless — a hit means the URL is a known " +
-                        "malware source; a miss means only \"not in this one database\", not \"safe\".",
+                    "Both backends need your own free API key — neither is keyless (confirmed " +
+                        "live against both APIs: a missing key gets an auth-error response, not a " +
+                        "scan). A hit means the URL is specifically known-bad; a miss means only " +
+                        "\"not in this database\", not \"safe\".",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
+                    value = urlHausKeyInput,
+                    onValueChange = { urlHausKeyInput = it },
+                    label = { Text("URLhaus Auth-Key (get one at auth.abuse.ch)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(onClick = { urlHausSettings.setAuthKey(urlHausKeyInput.trim()) }) { Text("Save key") }
+                OutlinedTextField(
                     value = vtKeyInput,
                     onValueChange = { vtKeyInput = it },
-                    label = { Text("VirusTotal API key (optional)") },
+                    label = { Text("VirusTotal API key") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -173,11 +186,15 @@ fun UrlToolsDialog(
                         scanning = true
                         scanResult = ""
                         scope.launch {
-                            val urlHaus = UrlScanner.checkUrlHaus(input)
-                            scanResult += urlHaus.fold(
-                                onSuccess = { "${it.source}: ${it.detail}\n" },
-                                onFailure = { "URLhaus check failed: ${it.message}\n" },
-                            )
+                            scanResult += if (urlHausKey.isNotBlank()) {
+                                val urlHaus = UrlScanner.checkUrlHaus(input, urlHausKey)
+                                urlHaus.fold(
+                                    onSuccess = { "${it.source}: ${it.detail}\n" },
+                                    onFailure = { "URLhaus check failed: ${it.message}\n" },
+                                )
+                            } else {
+                                "URLhaus: no Auth-Key set, skipped\n"
+                            }
                             if (vtKey.isNotBlank()) {
                                 val vt = UrlScanner.checkVirusTotal(input, vtKey)
                                 scanResult += vt.fold(

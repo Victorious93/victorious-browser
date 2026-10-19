@@ -27,6 +27,23 @@ class UrlScannerTest {
         assertEquals(null, verdict.malicious)
     }
 
+    // The next two bodies are captured verbatim from live `curl` calls against
+    // urlhaus-api.abuse.ch in this session (see UrlScanner's doc), not guessed.
+
+    @Test
+    fun interpretsUrlHausMissingAuthKeyResponse() {
+        val verdict = UrlScanner.interpretUrlHausJson("""{"error": "Unauthorized"}""")
+        assertEquals(null, verdict.malicious)
+        assertTrue(verdict.detail.contains("Unauthorized"))
+    }
+
+    @Test
+    fun interpretsUrlHausUnknownAuthKeyResponse() {
+        val verdict = UrlScanner.interpretUrlHausJson("""{"query_status": "unknown_auth_key"}""")
+        assertEquals(null, verdict.malicious)
+        assertTrue(verdict.detail.contains("rejected"))
+    }
+
     @Test
     fun interpretsVirusTotalPendingAnalysis() {
         val result = UrlScanner.interpretVirusTotalAnalysisJson(
