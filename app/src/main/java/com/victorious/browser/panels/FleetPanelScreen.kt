@@ -101,6 +101,8 @@ fun FleetPanelScreen(
     onOpenHome: () -> Unit = {},
     onOpenHelp: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
+    onOpenWireGuard: () -> Unit = {},
+    onOpenHeadscale: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -235,6 +237,13 @@ fun FleetPanelScreen(
             "Help",
             listOf(
                 Tool("Help / Manual", "In-app manual & safety", Icons.Filled.Info, cyan, onOpenHelp),
+            ),
+        ),
+        ToolGroup(
+            "VPN / Mesh",
+            listOf(
+                Tool("WireGuard", "VPN client (conflicts with Mesh)", Icons.Filled.Lock, violet, onOpenWireGuard),
+                Tool("Headscale", "Control-server API settings", Icons.Filled.Settings, violet, onOpenHeadscale),
             ),
         ),
     )

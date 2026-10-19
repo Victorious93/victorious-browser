@@ -63,6 +63,22 @@ to extract article content, which is then passed through this app's own
 sanitization pass (ReaderMode.sanitizeContentHtml) before being rendered back.
 
 -----------------------------------------------------------------------------
+WireGuard for Android — tunnel library (com.wireguard.android:tunnel)
+Copyright © 2017-2023 WireGuard LLC. All Rights Reserved.
+License: Apache License 2.0
+https://git.zx2c4.com/wireguard-android/
+https://www.apache.org/licenses/LICENSE-2.0
+
+The embeddable "tunnel" library only (not the full WireGuard-for-Android app,
+which is GPL-2.0) — GoBackend/Tunnel/Config, including the native wireguard-go
+JNI engine bundled in the AAR. This is the one feature in this app that DOES use
+Android's VpnService (via GoBackend.VpnService, auto-merged into the manifest
+from the library's own AAR manifest), which conflicts with the local inspection
+proxy's and the README's stated "no VpnService, the slot is reserved for the
+separate Victorious Mesh app" design — see WireGuardTunnelManager's doc. Added
+at the operator's explicit request, accepting that trade-off.
+
+-----------------------------------------------------------------------------
 Patterns note — Lightning Browser
 This project draws on navigation / WebViewClient patterns observed in
 Lightning Browser (https://github.com/anthonycr/Lightning-Browser).

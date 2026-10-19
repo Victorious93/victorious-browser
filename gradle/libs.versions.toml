@@ -11,6 +11,7 @@ bouncycastle = "1.81.1"
 desugar = "2.1.2"
 junit = "4.13.2"
 orgJson = "20240303"
+wireguardTunnel = "1.0.20230706"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -31,6 +32,7 @@ bouncycastle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", ver
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugar" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+wireguard-tunnel = { group = "com.wireguard.android", name = "tunnel", version.ref = "wireguardTunnel" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

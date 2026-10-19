@@ -482,6 +482,41 @@ the current page renders and sanitizes arbitrary markup, so stripping the input
 first would defeat it. Meant for testing the owner's own pages' handling of
 untrusted input, in the same spirit as the Burp-lite modify-and-replay tooling below.
 
+## WireGuard + Headscale settings
+
+Two "advanced settings" screens from the launcher, requested directly and built
+after confirming scope: a WireGuard VPN client and a keyless Headscale API client.
+
+**⚠️ WireGuard conflicts with this app's own design.** Everything else in this
+README up to this point exists specifically so this browser's own traffic
+inspection avoids `android.net.VpnService`, because — as stated above — "the
+device's single VPN/tun slot is reserved for a separate mesh-networking app"
+(Victorious Mesh). WireGuard needs exactly that VpnService. Android allows only
+one active VPN system-wide: connecting this app's tunnel tears down Victorious
+Mesh's if it's running, and vice versa, and neither app can coordinate that for
+the other. This was built anyway, at the operator's explicit request, after being
+told about the conflict.
+
+- **WireGuard** — **Add profile** to enter a peer's fields (private key, address,
+  DNS, peer public key, endpoint, allowed IPs, keepalive), validated on save against
+  the real [`com.wireguard.android:tunnel`](https://git.zx2c4.com/wireguard-android/)
+  library (Apache-2.0, see NOTICE) — the official embeddable WireGuard engine, not a
+  hand-rolled reimplementation of the protocol. **Connect** triggers Android's
+  standard per-app VPN consent dialog the first time, then brings the tunnel up via
+  `GoBackend`. One tunnel at a time. **Never run on a device in this session** — no
+  emulator or device was available; everything here is unit-tested against the real
+  library's config parser (which has no Android or native-code dependency) but the
+  actual VpnService/native path has not been exercised.
+- **Headscale** — server URL + API key, then **List nodes** / **Create pre-auth
+  key** against your Headscale server's `/api/v1` endpoints directly. No VPN
+  involved at all — purely HTTP, same `Authorization: Bearer` pattern as the virus
+  scan tools. **Unlike URLhaus/VirusTotal (confirmed live this session), there was
+  no Headscale server available to test against** — Headscale is self-hosted, so
+  these request/response shapes are from its published docs, not a captured real
+  response, and Headscale's API has genuinely changed shape across versions (the
+  `user` field especially). Verify against your own server's version before relying
+  on this.
+
 ## Network inspection
 
 Developer HTTP(S) inspection for traffic from **this app's own in-app WebView**
