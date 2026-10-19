@@ -26,6 +26,10 @@ data class CapturedExchange(
     // Deferred: body capture depth. Reserved so bodies can be added later.
     var requestBody: ByteArray? = null,
     var responseBody: ByteArray? = null,
+    // Set when ContentBlocker matched this host; the request never reached upstream.
+    // Recorded here (rather than silently dropped) so the content blocker never hides
+    // traffic from the inspection history it shares a code path with.
+    var blocked: BlockCategory? = null,
 ) {
     val durationMs: Long?
         get() = responseReceivedAt?.let { it - requestStartedAt }

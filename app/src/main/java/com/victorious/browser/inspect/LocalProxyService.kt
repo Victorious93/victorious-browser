@@ -67,7 +67,7 @@ object LocalProxyService {
                 .withAllowLocalOnly(true)
                 .withTransportProtocol(TransportProtocol.TCP)
                 .withManInTheMiddle(mitm)
-                .withFiltersSource(CaptureFiltersSource())
+                .withFiltersSource(CaptureFiltersSource(ContentBlockerSettings.get(context.applicationContext)))
                 .withTransparent(false)
                 .start()
 

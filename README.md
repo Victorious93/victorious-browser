@@ -106,6 +106,16 @@ The browsing surface is a single system **WebView** hosted in Jetpack Compose vi
 - Optional Desktop / Mobile UA toggle
 - **Night** chip: dark rendering for any site via `androidx.webkit` algorithmic darkening
   (falls back to force-dark on older WebViews); persisted across launches
+
+### Content blocker
+
+Host-suffix blocking by category (adware & malware, coin miners, trackers, adult —
+toggle each from **Network / History**). Matches at the local proxy when it's
+running, and via `shouldInterceptRequest` on the WebView when it's not, so blocking
+works either way. A blocked request is still recorded in capture history, marked
+`BLOCKED`, never silently dropped — the blocker must not hide traffic from the
+inspection tool it shares a code path with. The bundled host list (`ContentBlocker`)
+is a small illustrative sample, not a maintained blocklist.
 - `androidx.webkit` `ProxyController` routes the WebView through the local
   inspection proxy when enabled (see below)
 

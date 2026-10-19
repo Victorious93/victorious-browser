@@ -1,6 +1,6 @@
 # Victorious Framework — Victorious Browser Living Guide
 
-Last updated: 2026-10-19 (Lite Apps). This guide is updated whenever project state changes.
+Last updated: 2026-10-19 (content blocker). This guide is updated whenever project state changes.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
 ## 1. Current project status
@@ -12,10 +12,10 @@ Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, 
 | Fleet-panel launcher | Finished |
 | Fleet control bridge (Messenger IPC) | Finished |
 | Proxy modify-and-replay | Finished |
-| **Hermit-reference feature set** (this guide's focus) | **In progress — night mode + Lite Apps landed on this branch; 4 features planned** |
+| **Hermit-reference feature set** (this guide's focus) | **In progress — night mode, Lite Apps, content blocker landed on this branch; 3 features planned** |
 
-Tally: Finished 5 · In Progress 1 (Hermit-reference set: 2 of 6 features done) · Deferred 0 · Abandoned 0.
-[Certain] Night mode and Lite Apps compile, `assembleDebug` succeeds and `testDebugUnitTest` passes (28 tests). [Guessing] On-device visual behavior is unverified; algorithmic darkening needs WebView 114+ and a dark host theme (`Theme.VictoriousBrowser` is dark).
+Tally: Finished 5 · In Progress 1 (Hermit-reference set: 3 of 6 features done) · Deferred 0 · Abandoned 0.
+[Certain] Night mode, Lite Apps and the content blocker compile, `assembleDebug` succeeds and `testDebugUnitTest` passes (33 tests). [Guessing] On-device visual behavior is unverified; algorithmic darkening needs WebView 114+ and a dark host theme (`Theme.VictoriousBrowser` is dark).
 [Certain] Status above for the first five rows is taken from `README.md` and git history, not from a build or test run in this session.
 
 ## 2. Purpose of the Hermit-reference work
@@ -35,7 +35,7 @@ Hermit (Chimbori's Lite Apps Browser) is used as a **behavioral feature spec**, 
 |---|---|---|---|---|
 | Night mode | `browser/NightMode.kt`, `BrowserScreen.kt` | Algorithmic darkening, falling back to force-dark; persisted "Night" chip in the browser chrome. CSS injection not done. | S | **Done** (unit-tested strategy selection; not verified on a device) |
 | Lite Apps | `panels/Panel`, `PanelStore`, launcher | Pinned launcher shortcuts opening a panel in its own task, no address bar | S | **Done** (`liteapp/`; unit-tested link parsing; not verified on a device) |
-| Content blocker | LittleProxy request path | Blocklist match in proxy + `shouldInterceptRequest` fallback; **log blocked requests as "blocked" in `CaptureStore`** | M | Planned |
+| Content blocker | LittleProxy request path (`CaptureFiltersSource`) + `VictoriousWebViewClient.shouldInterceptRequest` | Host-suffix match against a small per-category sample list (`ContentBlocker`); blocked at the proxy when running, else in the WebView client; every block is recorded in `CaptureStore` with `CapturedExchange.blocked` set, never silently dropped | M | **Done** (sample blocklist only — not a maintained list; unit-tested matching; not verified on a device) |
 | User scripts | none | `WebViewCompat.addDocumentStartJavaScript`; per-site rules in a store modeled on `PanelStore` | M | Planned |
 | Reader mode | none | Inject Mozilla Readability.js (Apache-2.0), render result | S–M | Planned |
 | Sandboxes | none | WebView Profile API (separate cookie/storage jars); runtime `isFeatureSupported` check, degrade gracefully | M, highest risk | Planned |
@@ -45,7 +45,7 @@ Build order: night mode → Lite Apps → content blocker → user scripts → r
 ## 4. Implementation decisions
 
 1. Hermit is a spec only; no Hermit code or assets are reused. [Certain]
-2. Blocking in the proxy must not hide traffic from inspection history — blocked requests are recorded as blocked entries.
+2. Blocking in the proxy must not hide traffic from inspection history — blocked requests are recorded as blocked entries. **Implemented**: `CaptureFiltersSource` records before returning the blocked response; the WebView fallback records before returning an empty `WebResourceResponse`.
 3. Sandboxes depend on device WebView version. [Likely] Older devices lack Profile API support; the feature must feature-detect.
 4. New persistent settings follow the existing `SharedPreferences + JSON` pattern (`PanelStore`) until a Room migration is justified.
 
@@ -53,20 +53,20 @@ Build order: night mode → Lite Apps → content blocker → user scripts → r
 
 - Lite Apps: a shortcut stores only the panel id (`victorious-lite://panel/<id>`); the URL is resolved from `PanelStore` at launch, so editing a panel updates its shortcut and deleting it makes the shortcut show "Lite App no longer exists". `LiteAppActivity` is non-exported. Pinned shortcuts are not removed automatically when a panel is deleted.
 
-- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; 28 tests pass).
+- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; 33 tests pass).
 - Any new third-party library: add an entry to `NOTICE` with license and URL in the same commit.
 - Update this guide's status table and tally in the same commit as each feature lands.
 - Bridge protocol changes (new `browser.*` ops) require updating the README operations table and `BridgeCodecTest`.
 
 ## 6. Remaining work
 
-Content blocker, user scripts, reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel override, bridge op.
+User scripts, reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel override, bridge op.
 
 ## 7. Future improvements
 
 - Bridge ops for new features (e.g. toggle blocker, list sandboxes).
 - Per-panel night mode / script / blocker overrides.
-- Blocklist update mechanism and category selection UI.
+- Blocklist update mechanism (swap `ContentBlocker`'s sample host sets for a maintained subscription, e.g. EasyList-format) — the current list is illustrative only. Category selection UI is done; the update mechanism is not.
 - Room-backed stores if data volume grows.
 
 ## 8. Artifacts generated
@@ -74,3 +74,4 @@ Content blocker, user scripts, reader mode, sandboxes (section 3). Night mode fo
 - `docs/VICTORIOUS_FRAMEWORK_GUIDE.md` (this file)
 - `NightMode.kt`, `NightModeTest.kt`
 - `liteapp/LiteAppLinks.kt`, `LiteAppShortcuts.kt`, `LiteAppActivity.kt`, `LiteAppLinksTest.kt`
+- `inspect/ContentBlocker.kt`, `ContentBlockerTest.kt`
