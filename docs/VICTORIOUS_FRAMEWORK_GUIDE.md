@@ -1,6 +1,6 @@
 # Victorious Framework — Victorious Browser Living Guide
 
-Last updated: 2026-10-19 (user scripts). This guide is updated whenever project state changes.
+Last updated: 2026-10-19 (reader mode). This guide is updated whenever project state changes.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
 ## 1. Current project status
@@ -12,10 +12,10 @@ Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, 
 | Fleet-panel launcher | Finished |
 | Fleet control bridge (Messenger IPC) | Finished |
 | Proxy modify-and-replay | Finished |
-| **Hermit-reference feature set** (this guide's focus) | **In progress — night mode, Lite Apps, content blocker, user scripts landed; 2 features planned** |
+| **Hermit-reference feature set** (this guide's focus) | **In progress — night mode, Lite Apps, content blocker, user scripts, reader mode landed; 1 feature planned** |
 
-Tally: Finished 5 · In Progress 1 (Hermit-reference set: 4 of 6 features done) · Deferred 0 · Abandoned 0.
-[Certain] Night mode, Lite Apps, the content blocker and user scripts compile, `assembleDebug` succeeds and `testDebugUnitTest` passes (42 tests). [Guessing] On-device visual behavior is unverified; algorithmic darkening needs WebView 114+ and a dark host theme (`Theme.VictoriousBrowser` is dark).
+Tally: Finished 5 · In Progress 1 (Hermit-reference set: 5 of 6 features done) · Deferred 0 · Abandoned 0.
+[Certain] Night mode, Lite Apps, the content blocker, user scripts and reader mode compile, `assembleDebug` succeeds and `testDebugUnitTest` passes (51 tests). [Guessing] On-device visual behavior is unverified; algorithmic darkening needs WebView 114+ and a dark host theme (`Theme.VictoriousBrowser` is dark).
 [Certain] Status above for the first five rows is taken from `README.md` and git history, not from a build or test run in this session.
 
 ## 2. Purpose of the Hermit-reference work
@@ -37,7 +37,7 @@ Hermit (Chimbori's Lite Apps Browser) is used as a **behavioral feature spec**, 
 | Lite Apps | `panels/Panel`, `PanelStore`, launcher | Pinned launcher shortcuts opening a panel in its own task, no address bar | S | **Done** (`liteapp/`; unit-tested link parsing; not verified on a device) |
 | Content blocker | LittleProxy request path (`CaptureFiltersSource`) + `VictoriousWebViewClient.shouldInterceptRequest` | Host-suffix match against a small per-category sample list (`ContentBlocker`); blocked at the proxy when running, else in the WebView client; every block is recorded in `CaptureStore` with `CapturedExchange.blocked` set, never silently dropped | M | **Done** (sample blocklist only — not a maintained list; unit-tested matching; not verified on a device) |
 | User scripts | none | `userscript/` — `WebViewCompat.addDocumentStartJavaScript` where supported (`WebViewFeature.DOCUMENT_START_SCRIPT`), `evaluateJavascript` in `onPageStarted` as a fallback elsewhere; scripts stored per-host like `PanelStore` | M | **Done** (unit-tested host matching + origin-rule generation; not verified on a device, and the fallback path's "runs later than real document-start" caveat is real, not hypothetical) |
-| Reader mode | none | Inject Mozilla Readability.js (Apache-2.0), render result | S–M | Planned |
+| Reader mode | none | `reader/` — Mozilla's Readability.js (Apache-2.0, vendored verbatim at `assets/readability.js`) run via `evaluateJavascript`, output rendered back via `loadDataWithBaseURL` after this app's own sanitization pass | S–M | **Done** (unit-tested extraction-script building, double-encoded result decoding, and the sanitizer; not verified on a device or against a real page's Readability output) |
 | Sandboxes | none | WebView Profile API (separate cookie/storage jars); runtime `isFeatureSupported` check, degrade gracefully | M, highest risk | Planned |
 
 Build order: night mode → Lite Apps → content blocker → user scripts → reader mode → sandboxes.
@@ -48,19 +48,22 @@ Build order: night mode → Lite Apps → content blocker → user scripts → r
 2. Blocking in the proxy must not hide traffic from inspection history — blocked requests are recorded as blocked entries. **Implemented**: `CaptureFiltersSource` records before returning the blocked response; the WebView fallback records before returning an empty `WebResourceResponse`.
 3. Sandboxes depend on device WebView version. [Likely] Older devices lack Profile API support; the feature must feature-detect.
 4. New persistent settings follow the existing `SharedPreferences + JSON` pattern (`PanelStore`) until a Room migration is justified.
+5. Reader mode loads Readability's extracted HTML back into a JS-enabled WebView with this app's cookies attached. **Implemented**: `ReaderMode.sanitizeContentHtml` strips `<script>`/`<style>`/`<iframe>`/`<object>`/`<embed>`, `on*` handlers, and `javascript:` URLs before rendering — a regex pass, not a full sanitizer; harden with something like DOMPurify if this is ever exposed to less-trusted content than "pages the operator chose to browse to."
 
 ## 5. Maintenance procedures
 
 - Lite Apps: a shortcut stores only the panel id (`victorious-lite://panel/<id>`); the URL is resolved from `PanelStore` at launch, so editing a panel updates its shortcut and deleting it makes the shortcut show "Lite App no longer exists". `LiteAppActivity` is non-exported. Pinned shortcuts are not removed automatically when a panel is deleted.
 
-- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; 42 tests pass).
+- Reader mode: the "Reader" chip resets to off whenever the WebView navigates to a URL different from the one it was showing when reader mode was entered (e.g. a link tapped inside the rendered article) — see the comment at that check in `BrowserScreen.kt`.
+
+- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; 51 tests pass).
 - Any new third-party library: add an entry to `NOTICE` with license and URL in the same commit.
 - Update this guide's status table and tally in the same commit as each feature lands.
 - Bridge protocol changes (new `browser.*` ops) require updating the README operations table and `BridgeCodecTest`.
 
 ## 6. Remaining work
 
-Reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel override, bridge op.
+Sandboxes (section 3) — the last of the six. Night mode follow-ups: optional per-panel override, bridge op.
 
 ## 7. Future improvements
 
@@ -69,6 +72,7 @@ Reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel ov
 - User scripts: document-start injection is installed once per WebView instance at browser-screen creation, so a script added or edited while that screen is already open doesn't take effect until the WebView is recreated (navigating back to the launcher and reopening the panel/browser). The fallback path (`onPageStarted`) always reads the live store, so it's unaffected.
 - Blocklist update mechanism (swap `ContentBlocker`'s sample host sets for a maintained subscription, e.g. EasyList-format) — the current list is illustrative only. Category selection UI is done; the update mechanism is not.
 - Room-backed stores if data volume grows.
+- Reader mode's HTML sanitizer is a regex pass, not a full parser (see implementation decision 5); replace with DOMPurify or similar if the threat model ever widens beyond "pages the operator chose to browse to."
 
 ## 8. Artifacts generated
 
@@ -77,3 +81,4 @@ Reader mode, sandboxes (section 3). Night mode follow-ups: optional per-panel ov
 - `liteapp/LiteAppLinks.kt`, `LiteAppShortcuts.kt`, `LiteAppActivity.kt`, `LiteAppLinksTest.kt`
 - `inspect/ContentBlocker.kt`, `ContentBlockerTest.kt`
 - `userscript/UserScript.kt`, `UserScriptStore.kt`, `UserScriptInjector.kt`, `UserScriptsScreen.kt`, `UserScriptMatcherTest.kt`, `UserScriptInjectorTest.kt`
+- `reader/ReaderMode.kt`, `ReaderModeController.kt`, `ReaderModeTest.kt`, `assets/readability.js`

@@ -49,6 +49,19 @@ On Android ART the proxy forces Netty's NIO transport (TransportProtocol.TCP);
 native epoll is not available and is not used.
 
 -----------------------------------------------------------------------------
+Readability.js (@mozilla/readability)
+Copyright (c) 2010 Arc90 Inc; subsequent work copyright Mozilla and contributors
+License: Apache License 2.0
+https://github.com/mozilla/readability
+https://www.apache.org/licenses/LICENSE-2.0
+
+Vendored verbatim at app/src/main/assets/readability.js (fetched from the
+project's main branch, package version 0.6.0; license header kept intact).
+Used for reader mode: run via evaluateJavascript inside the page's own WebView
+to extract article content, which is then passed through this app's own
+sanitization pass (ReaderMode.sanitizeContentHtml) before being rendered back.
+
+-----------------------------------------------------------------------------
 Patterns note — Lightning Browser
 This project draws on navigation / WebViewClient patterns observed in
 Lightning Browser (https://github.com/anthonycr/Lightning-Browser).

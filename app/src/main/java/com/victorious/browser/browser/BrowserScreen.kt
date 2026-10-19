@@ -2,6 +2,7 @@ package com.victorious.browser.browser
 
 import android.view.ViewGroup
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.victorious.browser.reader.ReaderModeController
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
 import com.victorious.browser.userscript.UserScriptInjector
@@ -67,8 +69,10 @@ fun BrowserScreen(
     var desktopUa by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     val focusManager = LocalFocusManager.current
-    val nightSettings = NightModeSettings.get(LocalContext.current)
+    val appContext = LocalContext.current
+    val nightSettings = NightModeSettings.get(appContext)
     val nightMode by nightSettings.enabled.collectAsState()
+    var readerMode by remember { mutableStateOf(false) }
 
     fun syncNav(wv: WebView?) {
         canGoBack = wv?.canGoBack() == true
@@ -197,6 +201,31 @@ fun BrowserScreen(
                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
+            Spacer(Modifier.width(4.dp))
+            FilterChip(
+                selected = readerMode,
+                onClick = {
+                    val wv = webViewRef ?: return@FilterChip
+                    if (readerMode) {
+                        readerMode = false
+                        wv.loadUrl(currentUrl)
+                    } else {
+                        ReaderModeController.enter(wv, nightMode) { found ->
+                            if (found) {
+                                readerMode = true
+                            } else {
+                                Toast.makeText(appContext, "Reader mode isn't available for this page", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                label = { Text("Reader") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
+                    selectedLabelColor = NeonCyan,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
             if (!liteMode) {
                 Spacer(Modifier.width(4.dp))
                 if (onBackToLauncher != null) {
@@ -251,6 +280,10 @@ fun BrowserScreen(
                     UserScriptInjector.installAll(this, UserScriptStore.get(context).scripts.value)
                     webViewClient = VictoriousWebViewClient(
                         onUrlChanged = { url ->
+                            // A real navigation away from the rendered article (e.g. a
+                            // link tapped inside it) lands here with a different URL —
+                            // exit reader mode so its chip doesn't lie about page state.
+                            if (readerMode && url != currentUrl) readerMode = false
                             currentUrl = url
                             urlBarText = url
                             syncNav(this)
