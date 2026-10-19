@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
+import com.victorious.browser.userscript.UserScriptInjector
+import com.victorious.browser.userscript.UserScriptStore
 
 private const val HOME_URL = "https://example.com"
 
@@ -49,6 +51,7 @@ private const val HOME_URL = "https://example.com"
 fun BrowserScreen(
     initialUrl: String = HOME_URL,
     onOpenNetwork: () -> Unit = {},
+    onOpenScripts: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
     /** Lite App mode: no title strip, address bar, UA/Network controls. */
     liteMode: Boolean = false,
@@ -210,6 +213,12 @@ fun BrowserScreen(
                 ) {
                     Text("Network")
                 }
+                TextButton(
+                    onClick = onOpenScripts,
+                    colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+                ) {
+                    Text("Scripts")
+                }
             }
         }
 
@@ -235,6 +244,11 @@ fun BrowserScreen(
                     )
                     applyVictoriousWebSettings(this, desktopUa)
                     applyNightMode(this, nightMode)
+                    // Document-start injection is scoped to this WebView instance;
+                    // scripts added/edited afterward need a fresh WebView (see
+                    // UserScriptInjector's doc). Fallback path (onPageStarted) always
+                    // reads the live store, so it stays current even without recreation.
+                    UserScriptInjector.installAll(this, UserScriptStore.get(context).scripts.value)
                     webViewClient = VictoriousWebViewClient(
                         onUrlChanged = { url ->
                             currentUrl = url

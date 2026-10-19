@@ -116,6 +116,20 @@ works either way. A blocked request is still recorded in capture history, marked
 `BLOCKED`, never silently dropped — the blocker must not hide traffic from the
 inspection tool it shares a code path with. The bundled host list (`ContentBlocker`)
 is a small illustrative sample, not a maintained blocklist.
+
+### User scripts
+
+Per-site JavaScript, managed from the **Scripts** button in the browser chrome
+(hidden in Lite App mode). Each script has a name, a host pattern (`example.com`
+or `*.example.com`, subdomain-inclusive either way), and a body. Injected via
+`WebViewCompat.addDocumentStartJavaScript` where the device's WebView supports it
+(`WebViewFeature.DOCUMENT_START_SCRIPT`) — scoped to origin-match rules built from
+the host pattern, so it runs before the page's own scripts. Falls back to
+`evaluateJavascript` in `onPageStarted` on older WebViews; that path runs after the
+page has already started, so a script relying on running first can be too late.
+Document-start scripts are installed once when the browser screen's WebView is
+created — a script added or edited while that screen stays open takes effect on
+the next time it's recreated, not immediately.
 - `androidx.webkit` `ProxyController` routes the WebView through the local
   inspection proxy when enabled (see below)
 

@@ -23,6 +23,7 @@ import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
+import com.victorious.browser.userscript.UserScriptsScreen
 import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
@@ -60,6 +61,7 @@ private sealed class AppDestination {
     data class Browser(val url: String) : AppDestination()
     data object Network : AppDestination()
     data object FleetControl : AppDestination()
+    data class Scripts(val returnUrl: String) : AppDestination()
 }
 
 @Composable
@@ -104,6 +106,7 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 initialUrl = dest.url,
                 onOpenNetwork = { destination = AppDestination.Network },
+                onOpenScripts = { destination = AppDestination.Scripts(dest.url) },
                 onBackToLauncher = { destination = AppDestination.Launcher },
             )
             AppDestination.Network -> NetworkHistoryScreen(
@@ -113,6 +116,10 @@ fun VictoriousBrowserApp(
             AppDestination.FleetControl -> FleetControlScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
+            )
+            is AppDestination.Scripts -> UserScriptsScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Browser(dest.returnUrl) },
             )
         }
     }
