@@ -7,14 +7,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.victorious.browser.ui.theme.NeonCyan
+import com.victorious.browser.ui.theme.NeonMagenta
 import kotlinx.coroutines.launch
 
 private fun copyToClipboard(context: Context, label: String, text: String) {
@@ -32,10 +37,10 @@ private fun copyToClipboard(context: Context, label: String, text: String) {
 }
 
 /**
- * URL tools: encode/decode, query-param view, and link shortening (via
- * [LinkShortener], the one network call in this dialog). [onOpenUrl] navigates the
- * browser's WebView to a result (e.g. a freshly shortened link) without the caller
- * needing to parse anything back out of this dialog's state.
+ * URL tools: encode/decode, query-param view, link shortening, a structured URL
+ * editor ("URL changer"), and malware/phishing lookups ("virus scan"). [onOpenUrl]
+ * navigates the browser's WebView to a result without the caller needing to parse
+ * anything back out of this dialog's state.
  */
 @Composable
 fun UrlToolsDialog(
@@ -48,6 +53,21 @@ fun UrlToolsDialog(
     var input by remember { mutableStateOf(initialUrl) }
     var output by remember { mutableStateOf("") }
     var shortening by remember { mutableStateOf(false) }
+    var scanning by remember { mutableStateOf(false) }
+    var scanResult by remember { mutableStateOf("") }
+
+    // URL changer fields, seeded from initialUrl when it parses as an absolute URL.
+    val seeded = remember { UrlTools.parseParts(initialUrl) }
+    var scheme by remember { mutableStateOf(seeded?.scheme ?: "https") }
+    var host by remember { mutableStateOf(seeded?.host ?: "") }
+    var port by remember { mutableStateOf(seeded?.port?.toString() ?: "") }
+    var path by remember { mutableStateOf(seeded?.path ?: "") }
+    var query by remember { mutableStateOf(seeded?.query ?: "") }
+    var fragment by remember { mutableStateOf(seeded?.fragment ?: "") }
+
+    val vtSettings = remember { VirusTotalSettings.get(context) }
+    val vtKey by vtSettings.apiKey.collectAsState()
+    var vtKeyInput by remember { mutableStateOf(vtKey) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -98,6 +118,85 @@ fun UrlToolsDialog(
                         TextButton(onClick = { copyToClipboard(context, "url-tools", output) }) { Text("Copy") }
                         TextButton(onClick = { onOpenUrl(output); onDismiss() }) { Text("Open") }
                     }
+                }
+
+                HorizontalDivider(Modifier.height(1.dp))
+                Text("URL changer", style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
+                TextButton(onClick = { UrlTools.parseParts(input)?.let { p ->
+                    scheme = p.scheme; host = p.host; port = p.port?.toString() ?: ""
+                    path = p.path; query = p.query; fragment = p.fragment
+                } }) { Text("Load from URL / text above") }
+                OutlinedTextField(value = scheme, onValueChange = { scheme = it }, label = { Text("Scheme") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("Host") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = port, onValueChange = { port = it }, label = { Text("Port (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = path, onValueChange = { path = it }, label = { Text("Path") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Query (no leading ?)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = fragment, onValueChange = { fragment = it }, label = { Text("Fragment (no leading #)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                TextButton(
+                    onClick = {
+                        if (host.isBlank()) {
+                            output = "Host is required"
+                            return@TextButton
+                        }
+                        output = UrlTools.buildFromParts(
+                            UrlTools.UrlParts(
+                                scheme = scheme.ifBlank { "https" },
+                                host = host,
+                                port = port.toIntOrNull(),
+                                path = path,
+                                query = query,
+                                fragment = fragment,
+                            ),
+                        )
+                    },
+                ) { Text("Rebuild URL", color = NeonCyan) }
+
+                HorizontalDivider(Modifier.height(1.dp))
+                Text("Virus / malware scan", style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
+                Text(
+                    "URLhaus (abuse.ch) is free and keyless — a hit means the URL is a known " +
+                        "malware source; a miss means only \"not in this one database\", not \"safe\".",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = vtKeyInput,
+                    onValueChange = { vtKeyInput = it },
+                    label = { Text("VirusTotal API key (optional)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(onClick = { vtSettings.setApiKey(vtKeyInput.trim()) }) { Text("Save key") }
+                TextButton(
+                    enabled = !scanning,
+                    onClick = {
+                        scanning = true
+                        scanResult = ""
+                        scope.launch {
+                            val urlHaus = UrlScanner.checkUrlHaus(input)
+                            scanResult += urlHaus.fold(
+                                onSuccess = { "${it.source}: ${it.detail}\n" },
+                                onFailure = { "URLhaus check failed: ${it.message}\n" },
+                            )
+                            if (vtKey.isNotBlank()) {
+                                val vt = UrlScanner.checkVirusTotal(input, vtKey)
+                                scanResult += vt.fold(
+                                    onSuccess = { "${it.source}: ${it.detail}" },
+                                    onFailure = { "VirusTotal check failed: ${it.message}" },
+                                )
+                            } else {
+                                scanResult += "VirusTotal: no API key set, skipped"
+                            }
+                            scanning = false
+                        }
+                    },
+                ) { Text(if (scanning) "Scanning…" else "Scan URL") }
+                if (scanResult.isNotBlank()) {
+                    Text(
+                        scanResult,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        color = NeonMagenta,
+                    )
                 }
             }
         },

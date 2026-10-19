@@ -1,5 +1,6 @@
 package com.victorious.browser.urltools
 
+import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -45,5 +46,48 @@ object UrlTools {
         if (params.isEmpty()) return base
         val query = params.joinToString("&") { "${encode(it.key)}=${encode(it.value)}" }
         return "$base?$query"
+    }
+
+    /**
+     * "URL changer": a URL broken into its editable components. [port] is null when
+     * absent from the original URL (not the same as explicitly stating a scheme's
+     * default port) — [buildFromParts] omits it in that case too, so a round trip
+     * through [parseParts] → [buildFromParts] doesn't invent a port that wasn't there.
+     */
+    data class UrlParts(
+        val scheme: String,
+        val host: String,
+        val port: Int?,
+        val path: String,
+        val query: String,
+        val fragment: String,
+    )
+
+    /** Parses an absolute URL into [UrlParts]; null if it isn't a valid absolute URL (needs a scheme and host). */
+    fun parseParts(url: String): UrlParts? = try {
+        val uri = URI(url)
+        if (uri.scheme == null || uri.host == null) {
+            null
+        } else {
+            UrlParts(
+                scheme = uri.scheme,
+                host = uri.host,
+                port = if (uri.port == -1) null else uri.port,
+                path = uri.rawPath.orEmpty(),
+                query = uri.rawQuery.orEmpty(),
+                fragment = uri.rawFragment.orEmpty(),
+            )
+        }
+    } catch (_: Exception) {
+        null
+    }
+
+    /** Reassembles [UrlParts] back into a URL string. */
+    fun buildFromParts(parts: UrlParts): String = buildString {
+        append(parts.scheme).append("://").append(parts.host)
+        parts.port?.let { append(':').append(it) }
+        append(parts.path)
+        if (parts.query.isNotBlank()) append('?').append(parts.query)
+        if (parts.fragment.isNotBlank()) append('#').append(parts.fragment)
     }
 }
