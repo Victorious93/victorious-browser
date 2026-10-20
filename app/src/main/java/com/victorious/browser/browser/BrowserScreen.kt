@@ -51,6 +51,8 @@ import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.netid.NetIdSettings
 import com.victorious.browser.netid.SpoofInjector
 import com.victorious.browser.userscript.UserScriptStore
+import com.victorious.browser.antiphish.AntiPhishController
+import com.victorious.browser.antiphish.AntiPhishWarningBanner
 
 private const val HOME_URL = "https://example.com"
 
@@ -60,6 +62,7 @@ fun BrowserScreen(
     onOpenNetwork: () -> Unit = {},
     onOpenScripts: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
+    onOpenAntiPhish: (() -> Unit)? = null,
     /** Lite App mode: no title strip, address bar, UA/Network controls. */
     liteMode: Boolean = false,
     /** Sandbox (androidx.webkit Profile) to isolate this WebView's cookies/storage into.
@@ -83,6 +86,10 @@ fun BrowserScreen(
     var readerMode by remember { mutableStateOf(false) }
     var showUrlTools by remember { mutableStateOf(false) }
     var showInject by remember { mutableStateOf(false) }
+
+    val antiPhish = remember { AntiPhishController.get(appContext) }
+    val phishResult by antiPhish.lastResult.collectAsState()
+    val phishBanner by antiPhish.bannerVisible.collectAsState()
 
     fun syncNav(wv: WebView?) {
         canGoBack = wv?.canGoBack() == true
@@ -296,6 +303,21 @@ fun BrowserScreen(
             )
         } else {
             Spacer(Modifier.height(3.dp))
+        }
+
+
+        if (phishBanner) {
+            phishResult?.let { r ->
+                AntiPhishWarningBanner(
+                    result = r,
+                    onDismiss = { antiPhish.dismissCurrent() },
+                    onReport = {
+                        antiPhish.reportCurrent()
+                        Toast.makeText(appContext, "Reported to Anti-Phish log", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenModule = onOpenAntiPhish,
+                )
+            }
         }
 
         AndroidView(

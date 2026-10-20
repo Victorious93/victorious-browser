@@ -97,6 +97,18 @@ for the developer's own traffic.
   index serialization, report generation, filename sanitization, exchange
   stripping) is unit-tested. (landed on `feature/cert-evidence`)
 
+- **Anti-Phish (defensive)** — in-app phishing-awareness training (red-flag
+  cards + brand-neutral "spot the phish" quiz), a **passive** page analyzer that
+  scores navigations for lookalike/typosquat domains, punycode/IDN homoglyphs,
+  mixed-script labels, suspicious TLDs, structural host oddities, password fields
+  on non-HTTPS, credential forms on IP-literal hosts, cross-domain form `action`,
+  hidden/off-screen credential fields, and title/brand-keyword mismatches vs a
+  user-editable known-good brand list. Non-blocking advisory banner; local host-only
+  report log (no query/secrets/credentials) with JSON export to Downloads. Off by
+  default. Pure detection logic unit-tested (`java.net.IDN`, no new deps). **Not** a
+  credential harvester, page-clone wizard, capture server, or browser-hooking tool.
+  (landed on `feature/anti-phish`)
+
 
 ## Fleet export + Metasploit RPC
 

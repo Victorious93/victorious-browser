@@ -113,3 +113,48 @@ require external control ON. See README for the `browser.*` table.
 
 `invalid_parameters`, `not_paired`, `not_found`, `proxy_error`, `internal`,
 `requires_confirm`.
+
+
+## Anti-Phish (defensive)
+
+Module path: `com.victorious.browser.antiphish`.
+
+**Purpose.** Protective awareness + passive detection on pages the user
+navigates to. Replaces any offensive SET/BeEF-style ask. Does **not** harvest
+credentials, clone login pages, run a capture server, or hook browsers.
+
+**Training UI.** Fleet neon Compose screen with red-flag cards (lookalike
+domains, punycode/homoglyphs, mismatched form actions, insecure forms, urgency
+cues, title/brand mismatch) and a static brand-neutral quiz (`PhishQuiz` —
+fictional AcmePay / NorthBank / CloudBox only).
+
+**Passive analyzer.** On each WebView `onPageFinished`, when detection is
+enabled (`AntiPhishSettings`, **off by default**), `PageProbe` runs a JS
+snapshot that returns title, HTTPS flag, form metadata (action host, password/
+username presence, hidden-cred flags — **never field values**), and alt/aria
+brand hints. `PhishingScorer` combines:
+
+| Heuristic | Source |
+|---|---|
+| Punycode / IDN / mixed-script labels | `DomainAnalyzer` + `java.net.IDN` |
+| Typosquat / lookalike vs known-good | Levenshtein + confusable skeleton |
+| Suspicious TLD / structural host | Built-in TLD set + hyphen/depth heuristics |
+| Password on non-HTTPS | `FormAnalyzer` |
+| Cred form on IP-literal host | `FormAnalyzer` |
+| Cross-domain form `action` | Registrable-domain compare |
+| Hidden / off-screen credential fields | DOM style heuristics in probe |
+| Title / brand-keyword mismatch | `PageBrandAnalyzer` vs editable list |
+
+Score 0–100; advisory banner at ≥40 (`RISK_THRESHOLD`). User can dismiss or
+report. Navigation is never blocked.
+
+**Reporting.** `AntiPhishReportLog` stores `{timestamp, host, score, level,
+reasons[]}` — host only, no query/path secrets, no credentials. Export writes
+JSON under Downloads/`VictoriousBrowser/` via `MediaStoreDownloads`.
+
+**Wiring.** Fleet Panels → **Anti-Phish**; MainActivity destination; hooked from
+`VictoriousWebViewClient.onPageFinished` into TabbedBrowserScreen / BrowserScreen
+banners.
+
+**Tests.** `DomainAnalyzerTest`, `FormAnalyzerTest`, `PageBrandAnalyzerTest`,
+`PhishingScorerTest`, `PageProbeTest` (pure JVM unit tests).

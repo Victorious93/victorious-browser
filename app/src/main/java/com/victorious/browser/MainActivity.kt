@@ -32,6 +32,7 @@ import com.victorious.browser.export.ExportScreen
 import com.victorious.browser.export.FleetExportStaging
 import com.victorious.browser.certmgr.CertScreen
 import com.victorious.browser.evidence.EvidenceScreen
+import com.victorious.browser.antiphish.AntiPhishScreen
 import com.victorious.browser.msf.MsfConsoleScreen
 import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
@@ -86,6 +87,7 @@ private sealed class AppDestination {
     data object Msf : AppDestination()
     data object Certs : AppDestination()
     data object Evidence : AppDestination()
+    data object AntiPhish : AppDestination()
 }
 
 @Composable
@@ -141,6 +143,7 @@ fun VictoriousBrowserApp(
                 onOpenMsf = { destination = AppDestination.Msf },
                 onOpenCerts = { destination = AppDestination.Certs },
                 onOpenEvidence = { destination = AppDestination.Evidence },
+                onOpenAntiPhish = { destination = AppDestination.AntiPhish },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
@@ -148,6 +151,7 @@ fun VictoriousBrowserApp(
                 onOpenNetwork = { destination = AppDestination.Network },
                 onOpenScripts = { destination = AppDestination.Scripts },
                 onBackToLauncher = { destination = AppDestination.Launcher },
+                onOpenAntiPhish = { destination = AppDestination.AntiPhish },
             )
             AppDestination.Network -> NetworkHistoryScreen(
                 modifier = pad,
@@ -200,6 +204,10 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )
+            AppDestination.AntiPhish -> AntiPhishScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
             AppDestination.Scripts -> UserScriptsScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Browser },
@@ -211,6 +219,7 @@ fun VictoriousBrowserApp(
                 onOpenNetwork = { destination = AppDestination.Network },
                 onOpenScripts = { destination = AppDestination.Scripts },
                 onBackToLauncher = { destination = AppDestination.Launcher },
+                onOpenAntiPhish = { destination = AppDestination.AntiPhish },
             )
             AppDestination.Sandboxes -> SandboxesScreen(
                 modifier = pad,

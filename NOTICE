@@ -150,3 +150,13 @@ ZIPs use the JDK's java.util.zip; screenshots use the Android framework Bitmap/
 Canvas; report/index files use the already-bundled org.json. CA/evidence exports
 to Downloads use the Android MediaStore framework API (no dependency).
 
+
+-----------------------------------------------------------------------------
+Anti-Phish module (app/src/main/java/com/victorious/browser/antiphish/)
+
+Defensive / educational only. No new third-party dependencies.
+Punycode/IDN decoding uses the JDK's java.net.IDN. Homoglyph folding uses a
+small first-party confusable map (inspired by Unicode TR39 concepts; no TR39
+data tables vendored). Report JSON uses the already-bundled org.json.
+Exports to Downloads reuse MediaStoreDownloads (Android MediaStore framework).
+No credential capture, page cloning, or browser exploitation code is included.
