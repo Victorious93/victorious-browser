@@ -1,5 +1,6 @@
 package com.victorious.browser.sandbox
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,14 +50,7 @@ fun SandboxesScreen(
     var deleting by remember { mutableStateOf<String?>(null) }
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(onClick = onBack) { Text("← Panels", color = NeonCyan) }
-            Text("Sandboxes", style = MaterialTheme.typography.titleMedium, color = NeonMagenta)
-        }
+        NeonToolHeader(title = "Sandboxes", onBack = onBack)
 
         if (!supported) {
             Text(

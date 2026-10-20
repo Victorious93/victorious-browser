@@ -1,5 +1,6 @@
 package com.victorious.browser.antiphish
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,14 +62,7 @@ fun AntiPhishScreen(
             .fillMaxSize()
             .padding(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Anti-Phish", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Anti-Phish", onBack = onBack)
         Text(
             "Defensive awareness + passive page scoring. Never harvests credentials. Off by default.",
             style = MaterialTheme.typography.bodySmall,

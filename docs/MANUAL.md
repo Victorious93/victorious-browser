@@ -158,3 +158,21 @@ banners.
 
 **Tests.** `DomainAnalyzerTest`, `FormAnalyzerTest`, `PageBrandAnalyzerTest`,
 `PhishingScorerTest`, `PageProbeTest` (pure JVM unit tests).
+
+## UI / Navigation (neon design system)
+
+The launcher (`FleetPanelScreen`) is a grouped dashboard with a brand-ring hero.
+Tool tiles are grouped into **Browse** (Browser, Sandboxes), **Recon** (Recon,
+OSINT), **Offense / Testing** (Scanner, Fuzz, Metasploit), **Net ID**
+(Net ID / Spoof), **Fleet** (Control, Export, Network) and **Defense** (Certs,
+Evidence, Anti-Phish). Every destination that existed before remains reachable;
+only the labels/layout changed (the Metasploit RPC console tile reads
+"Metasploit"). The hero also exposes a **Home** quick action.
+
+A branded **Home / new-tab** surface (`AppDestination.Home`) provides the brand
+ring, a search-or-URL quick-open bar (opens into the browser) and quick actions
+into Fleet panels / Browser / Recon / OSINT / Scanner.
+
+All tool screens now share `NeonToolHeader` (ring accent + gradient title + back +
+optional actions). This is a visual/structural change only — no op, feature or
+navigation wiring was removed.

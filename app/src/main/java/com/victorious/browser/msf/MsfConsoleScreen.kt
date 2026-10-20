@@ -1,5 +1,6 @@
 package com.victorious.browser.msf
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -84,14 +85,7 @@ fun MsfConsoleScreen(
             .padding(12.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Metasploit RPC", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Metasploit RPC", onBack = onBack)
         Text(
             "Connects to your own Metasploit msgrpc (msgpack over HTTP, /api/1.0/). " +
                 "Off by default; nothing connects without credentials + Connect.",

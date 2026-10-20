@@ -12,6 +12,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -293,32 +296,49 @@ fun TabbedBrowserScreen(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onBackToLauncher != null) {
+                Box(
+                    Modifier
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .clickable(onClick = onBackToLauncher)
+                        .padding(4.dp),
+                ) {
+                    com.victorious.browser.ui.components.BrandRing(size = 30.dp, strokeWidth = 3.dp, glow = false)
+                }
+                Spacer(Modifier.width(6.dp))
+            }
             OutlinedTextField(
                 value = urlBarText,
                 onValueChange = { urlBarText = it },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
+                shape = MaterialTheme.shapes.large,
+                leadingIcon = {
+                    androidx.compose.material3.Icon(
+                        androidx.compose.material.icons.Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = NeonCyan,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onBackground,
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = NeonCyan,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    cursorColor = NeonCyan,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    cursorColor = NeonMagenta,
                     focusedLabelColor = NeonCyan,
                 ),
-                label = { Text("URL") },
+                label = { Text("Search or enter address") },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Uri,
                     imeAction = ImeAction.Go,
                 ),
                 keyboardActions = KeyboardActions(onGo = { navigateTo(urlBarText) }),
             )
-            Spacer(Modifier.width(6.dp))
-            TextButton(
-                onClick = { navigateTo(urlBarText) },
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
-            ) { Text("Go") }
+            Spacer(Modifier.width(8.dp))
+            com.victorious.browser.ui.components.NeonButton("Go", onClick = { navigateTo(urlBarText) })
         }
 
         // Nav controls

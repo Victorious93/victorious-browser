@@ -1,5 +1,6 @@
 package com.victorious.browser.scanner
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,14 +63,7 @@ fun ScannerScreen(
     val tabs = listOf("Scope", "Sitemap", "Active Scan", "Header Fuzz", "Smuggling", "OOB")
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Scanner", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Scanner", onBack = onBack)
         Text(
             "Burp-lite toolset for your own authorized targets. Active/intrusive " +
                 "actions are opt-in, require an in-scope host, and never run on browsing traffic.",

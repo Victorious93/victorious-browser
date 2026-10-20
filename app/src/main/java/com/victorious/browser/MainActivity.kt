@@ -22,6 +22,7 @@ import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.browser.TabStore
 import com.victorious.browser.browser.TabbedBrowserScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
+import com.victorious.browser.home.HomeScreen
 import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.osint.OsintScreen
 import com.victorious.browser.recon.ReconWorkbenchScreen
@@ -72,6 +73,7 @@ class MainActivity : ComponentActivity() {
 
 private sealed class AppDestination {
     data object Launcher : AppDestination()
+    data object Home : AppDestination()
     data object Browser : AppDestination()
     data class SandboxBrowser(val url: String, val sandbox: String) : AppDestination()
     data object Network : AppDestination()
@@ -144,6 +146,16 @@ fun VictoriousBrowserApp(
                 onOpenCerts = { destination = AppDestination.Certs },
                 onOpenEvidence = { destination = AppDestination.Evidence },
                 onOpenAntiPhish = { destination = AppDestination.AntiPhish },
+                onOpenHome = { destination = AppDestination.Home },
+            )
+            AppDestination.Home -> HomeScreen(
+                modifier = pad,
+                onOpenUrl = { url -> openUrl(url) },
+                onOpenPanels = { destination = AppDestination.Launcher },
+                onOpenBrowser = { destination = AppDestination.Browser },
+                onOpenRecon = { destination = AppDestination.Recon },
+                onOpenOsint = { destination = AppDestination.Osint },
+                onOpenScanner = { destination = AppDestination.Scanner },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,

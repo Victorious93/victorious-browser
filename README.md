@@ -545,3 +545,30 @@ system Light mode.
 
 See `NOTICE` for LittleProxy (Apache-2.0), BouncyCastle (Bouncy Castle Licence ~MIT),
 Netty (Apache-2.0, transitive), and AndroidX attributions.
+
+## Design system (neon brand)
+
+The app ships a cohesive dark neon design system under
+`app/src/main/java/com/victorious/browser/ui/`:
+
+- **Theme** (`ui/theme/`): charcoal base ramp + cyan→magenta accent tokens
+  (`Color.kt`), a Material3 dark `ColorScheme`, full `Typography`, and `Shapes`.
+  `BrandGradient.kt` is the single source of truth for the cyan→violet→magenta
+  brand gradient and exposes pure, unit-tested color math (`blendArgb`,
+  `sampleRing`) plus `Brush`/`BorderStroke` builders (`Brand`).
+- **Components** (`ui/components/`): `BrandRing` (the glowing cyan→magenta ring
+  brand mark, drawn with Compose Canvas — no assets), `GradientCard`,
+  `NeonSectionHeader`, `GradientTitle`, `StatusChip` (on/off/running/risk/warn/idle),
+  `NeonButton` / `NeonOutlineButton`, `ToolScaffold` + `NeonToolHeader` (the shared
+  tool-screen app bar: ring accent + gradient title + back + actions + underline),
+  and `ToolTile` / `QuickAction` for the launcher dashboard.
+
+**Surfaces restyled:** the launcher (`FleetPanelScreen`) is now a grouped
+dashboard (Browse · Recon · Offense/Testing · Net ID · Fleet · Defense) with a
+brand-ring hero; a new branded **Home / new-tab** screen (`home/HomeScreen.kt`)
+with the ring hero, quick-open bar and quick actions; the tabbed browser address
+bar; and every tool screen shares the `NeonToolHeader`. All existing tools and
+navigation entries are preserved.
+
+No new runtime dependencies were added; the ring/brand mark is pure Compose
+Canvas (no Lottie, no external icon packs — Material `material-icons-core` only).

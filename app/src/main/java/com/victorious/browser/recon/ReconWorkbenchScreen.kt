@@ -1,5 +1,6 @@
 package com.victorious.browser.recon
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,17 +50,11 @@ fun ReconWorkbenchScreen(
     val tabs = listOf("Encode/Decode", "Hashes", "URL Tools")
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Recon Workbench", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            Row {
-                TextButton(onClick = onOpenOsint) { Text("OSINT", color = NeonMagenta) }
-                TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-            }
-        }
+        NeonToolHeader(
+            title = "Recon Workbench",
+            onBack = onBack,
+            actions = { TextButton(onClick = onOpenOsint) { Text("OSINT", color = NeonMagenta) } },
+        )
         Text(
             "Offline, pure-logic transforms for your own authorized targets. " +
                 "JWT decode never verifies signatures.",

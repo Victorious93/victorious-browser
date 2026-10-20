@@ -1,5 +1,6 @@
 package com.victorious.browser.evidence
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -65,14 +66,7 @@ fun EvidenceScreen(
             .fillMaxSize()
             .padding(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Evidence", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Evidence", onBack = onBack)
         Text(
             "Recon evidence cases. The active case is where the browser camera action " +
                 "and saved request/response exchanges land. Secrets are stripped from " +

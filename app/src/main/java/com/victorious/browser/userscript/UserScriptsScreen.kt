@@ -1,5 +1,6 @@
 package com.victorious.browser.userscript
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -58,14 +59,7 @@ fun UserScriptsScreen(
     var deleting by remember { mutableStateOf<UserScript?>(null) }
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(onClick = onBack) { Text("← Browser", color = NeonCyan) }
-            Text("Scripts", style = MaterialTheme.typography.titleMedium, color = NeonMagenta)
-        }
+        NeonToolHeader(title = "Scripts", onBack = onBack)
 
         Text(
             if (UserScriptInjector.isDocumentStartSupported()) {

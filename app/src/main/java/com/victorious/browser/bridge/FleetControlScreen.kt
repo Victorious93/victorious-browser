@@ -1,5 +1,6 @@
 package com.victorious.browser.bridge
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -46,13 +47,7 @@ fun FleetControlScreen(
             .verticalScroll(rememberScrollState())
             .padding(12.dp),
     ) {
-        TextButton(onClick = onBack) { Text("← Back", color = NeonCyan) }
-        Text(
-            "Fleet control",
-            style = MaterialTheme.typography.titleLarge,
-            color = NeonMagenta,
-        )
-        Spacer(Modifier.height(8.dp))
+        NeonToolHeader(title = "Fleet control", onBack = onBack)
         Text(
             "Bound Messenger bridge for the owner's first-party controller. " +
                 "External control is OFF by default and cert-pinned to " +
