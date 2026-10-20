@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -62,6 +63,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.victorious.browser.inject.InjectionDialog
+import com.victorious.browser.reader.ReaderModeController
+import com.victorious.browser.urltools.UrlToolsDialog
+import com.victorious.browser.userscript.UserScriptInjector
+import com.victorious.browser.userscript.UserScriptStore
 import com.victorious.browser.panels.MeshBlockReason
 import com.victorious.browser.panels.MeshOpenDecision
 import com.victorious.browser.panels.MeshReachability
@@ -118,6 +124,15 @@ fun TabbedBrowserScreen(
     var desktopUa by remember { mutableStateOf(false) }
     var urlBarText by remember { mutableStateOf("") }
 
+    // Parity with single-tab BrowserScreen: Night (global setting, applied to every
+    // tab's WebView), Reader (per-tab), URL tools + Inject (act on the active tab).
+    val nightSettings = NightModeSettings.get(appContext)
+    val nightMode by nightSettings.enabled.collectAsState()
+    val readerTabs = remember { ReaderTabState() }
+    var readerVersion by remember { mutableStateOf(0) }
+    var showUrlTools by remember { mutableStateOf(false) }
+    var showInject by remember { mutableStateOf(false) }
+
     val panelStore = remember { PanelStore.get(context) }
     val panels by panelStore.panels.collectAsState()
     var showSwitcher by remember { mutableStateOf(false) }
@@ -148,8 +163,13 @@ fun TabbedBrowserScreen(
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
             applyVictoriousWebSettings(this, desktopUa)
+            applyNightMode(this, nightMode)
+            // Document-start user scripts, per tab (same as BrowserScreen). The
+            // onPageStarted fallback in VictoriousWebViewClient covers the rest.
+            UserScriptInjector.installAll(this, UserScriptStore.get(appContext).scripts.value)
             webViewClient = VictoriousWebViewClient(
                 onUrlChanged = { url ->
+                    if (readerTabs.onUrlChanged(tabId, url)) readerVersion++
                     tabStore.updateUrl(tabId, url)
                     tabStore.updateNav(tabId, canGoBack(), canGoForward())
                 },
@@ -246,6 +266,7 @@ fun TabbedBrowserScreen(
                     wv.destroy()
                 }
                 favicons.remove(id); progressMap.remove(id); loadingMap.remove(id)
+                if (readerTabs.remove(id)) readerVersion++
                 tabStore.closeTab(id)
             },
             onNewTab = { tabStore.openTab(HOME_URL) },
@@ -324,6 +345,48 @@ fun TabbedBrowserScreen(
                 ),
             )
             Spacer(Modifier.width(4.dp))
+            FilterChip(
+                selected = nightMode,
+                onClick = { nightSettings.setEnabled(!nightMode) },
+                label = { Text("Night") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = NeonMagenta.copy(alpha = 0.25f),
+                    selectedLabelColor = NeonMagenta,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+            Spacer(Modifier.width(4.dp))
+            @Suppress("UNUSED_EXPRESSION") readerVersion // recompose on reader changes
+            val activeReader = activeId?.let { readerTabs.isActive(it) } == true
+            FilterChip(
+                selected = activeReader,
+                onClick = {
+                    val id = activeId ?: return@FilterChip
+                    val wv = webViews[id] ?: return@FilterChip
+                    if (activeReader) {
+                        val url = readerTabs.exit(id) ?: tabStore.get(id)?.url
+                        readerVersion++
+                        url?.let { wv.loadUrl(it) }
+                    } else {
+                        val url = tabStore.get(id)?.url ?: wv.url.orEmpty()
+                        ReaderModeController.enter(wv, nightMode) { found ->
+                            if (found) {
+                                readerTabs.enter(id, url)
+                                readerVersion++
+                            } else {
+                                Toast.makeText(appContext, "Reader mode isn't available for this page", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                label = { Text("Reader") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
+                    selectedLabelColor = NeonCyan,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+            Spacer(Modifier.width(4.dp))
             if (onBackToLauncher != null) {
                 TextButton(
                     onClick = onBackToLauncher,
@@ -338,6 +401,14 @@ fun TabbedBrowserScreen(
                 onClick = onOpenScripts,
                 colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
             ) { Text("Scripts") }
+            TextButton(
+                onClick = { showUrlTools = true },
+                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+            ) { Text("URL") }
+            TextButton(
+                onClick = { showInject = true },
+                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
+            ) { Text("Inject") }
         }
 
         val activeProgress = activeId?.let { progressMap[it] } ?: 0
@@ -375,6 +446,8 @@ fun TabbedBrowserScreen(
                 val wv = webViews.getOrPut(id) {
                     buildWebView(id, tabStore.get(id)?.url ?: HOME_URL)
                 }
+                // Night mode is a global toggle: keep every live tab in sync.
+                webViews.values.forEach { applyNightMode(it, nightMode) }
                 val current = container.getChildAt(0)
                 if (current !== wv) {
                     (wv.parent as? ViewGroup)?.removeView(wv)
@@ -386,6 +459,17 @@ fun TabbedBrowserScreen(
                 .fillMaxWidth()
                 .weight(1f),
         )
+    }
+
+    if (showUrlTools) {
+        UrlToolsDialog(
+            initialUrl = activeTab?.url ?: urlBarText,
+            onOpenUrl = { url -> navigateTo(url) },
+            onDismiss = { showUrlTools = false },
+        )
+    }
+    if (showInject) {
+        InjectionDialog(webView = activeId?.let { webViews[it] }, onDismiss = { showInject = false })
     }
 
     if (showSwitcher) {
