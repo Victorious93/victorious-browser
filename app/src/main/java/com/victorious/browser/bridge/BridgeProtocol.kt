@@ -1,16 +1,22 @@
 package com.victorious.browser.bridge
 
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * EXTERNAL_NODE wire protocol — newline-delimited JSON, major = 1.
  *
- * BridgeRequest  { id, op, params }
- * BridgeResponse { id, ok, result?, error? } where error = { category, message }
+ * Legacy envelope (still accepted):
+ *   BridgeRequest  { id, op, params }
+ *   BridgeResponse { id, ok, result?, error? } where error = { category, message }
+ *
+ * Frozen remote-control envelope v1 (minor = 1) — see [BridgeV1] / [EnvelopeParser]:
+ *   { op, requestId, targetNodeRef?, actionRef?, params, nonce, timestampMs,
+ *     ttlMs?, destructive?, trigger?, …macro fields }
+ * Responses keep the same { id=requestId, ok, result?, error? } shape.
  */
 object BridgeProtocol {
     const val BRIDGE_PROTOCOL_MAJOR = 1
+    const val BRIDGE_PROTOCOL_MINOR = BridgeV1.PROTOCOL_MINOR
 
     const val MSG_WHAT_REQUEST = 1
     const val MSG_WHAT_RESPONSE = 2
@@ -50,6 +56,7 @@ enum class BridgeErrorCategory(val wire: String) {
     NOT_FOUND("not_found"),
     PROXY_ERROR("proxy_error"),
     INTERNAL("internal"),
+    REQUIRES_CONFIRM("requires_confirm"),
 }
 
 data class BridgeRequest(

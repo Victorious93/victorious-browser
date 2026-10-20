@@ -1,6 +1,7 @@
 # Victorious Framework — Victorious Browser Living Guide
 
 Last updated: 2026-10-19 (fixed system-bar icon color for the always-dark theme). This guide is updated whenever project state changes.
+Last bridge update: 2026-10-20 — frozen remote-control envelope v1 (MINOR=1): capabilities.get, remote.command, macro.step/run, node.status.get, config.export/import. See docs/MANUAL.md.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
 ## 1. Current project status

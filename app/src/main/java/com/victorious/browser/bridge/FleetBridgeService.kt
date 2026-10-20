@@ -8,32 +8,33 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Message
 import android.os.Messenger
-import android.os.Process
 import android.util.Log
+import org.json.JSONObject
 
 /**
- * Bound Messenger service — fleet control bridge (EXTERNAL_NODE).
+ * Bound Messenger bridge for EXTERNAL_NODE fleet control.
  *
- * Intent action: [BridgeProtocol.ACTION]
- * Message.what = 1 request / 2 response; payload in Bundle key [BridgeProtocol.BUNDLE_LINE]
- * as a single newline-delimited JSON line.
- *
- * Security check order on each request:
+ * Check order on each request:
  *  1. caller-identity via Message.sendingUid + package + signing-cert allowlist
- *  2. external-control-enabled switch (OFF by default) → not_paired
- *  3. envelope validity / op dispatch
+ *  2. envelope parse (legacy {id,op,params} OR frozen v1 envelope)
+ *  3. for v1: ttl/expiry + nonce replay
+ *  4. external-control switch for ops with remoteAllowed=false (and all legacy ops)
+ *  5. dispatch
+ *
+ * External control remains OFF by default. Identity gate is never weakened.
  */
 class FleetBridgeService : Service() {
     private lateinit var workerThread: HandlerThread
     private lateinit var messenger: Messenger
-    private lateinit var dispatcher: BridgeDispatcher
     private lateinit var settings: BridgeSettings
+    private lateinit var dispatcher: BridgeDispatcher
+    private val nonceCache = NonceCache()
 
     override fun onCreate() {
         super.onCreate()
         settings = BridgeSettings.get(this)
-        dispatcher = BridgeDispatcher(applicationContext)
-        workerThread = HandlerThread("FleetBridge", Process.THREAD_PRIORITY_DEFAULT).also { it.start() }
+        dispatcher = BridgeDispatcher(this)
+        workerThread = HandlerThread("fleet-bridge").also { it.start() }
         val handler = object : Handler(workerThread.looper) {
             override fun handleMessage(msg: Message) {
                 handle(msg)
@@ -72,24 +73,23 @@ class FleetBridgeService : Service() {
             return
         }
 
-        // 2) External control switch (OFF by default).
-        if (!settings.isExternalControlEnabled()) {
-            reply(replyTo, rejectLine(line, BridgeErrorCategory.NOT_PAIRED, "external control is off"))
-            return
-        }
-
-        // 3) Envelope validity + dispatch.
+        // 2–5) Envelope + guards + dispatch.
         val response = try {
             if (line.isBlank()) {
                 BridgeCodec.err("_", BridgeErrorCategory.INVALID_PARAMETERS, "empty request line")
             } else {
-                val req = BridgeCodec.parseRequestLine(line)
-                dispatcher.dispatch(req)
+                route(line)
             }
+        } catch (t: V1Invalid) {
+            BridgeCodec.err(
+                safeRequestId(line),
+                BridgeErrorCategory.INVALID_PARAMETERS,
+                t.message ?: "invalid_parameters",
+            )
         } catch (t: Throwable) {
             Log.e(TAG, "bad envelope", t)
             BridgeCodec.err(
-                safeId(line),
+                safeRequestId(line),
                 BridgeErrorCategory.INVALID_PARAMETERS,
                 t.message ?: "invalid envelope",
             )
@@ -97,8 +97,71 @@ class FleetBridgeService : Service() {
         reply(replyTo, BridgeCodec.encodeResponse(response))
     }
 
+    private fun route(line: String): BridgeResponse {
+        val o = JSONObject(line.trim())
+        return if (BridgeV1.isV1Object(o)) {
+            routeV1(o)
+        } else {
+            routeLegacy(line)
+        }
+    }
+
+    private fun routeLegacy(line: String): BridgeResponse {
+        // Legacy ops all require external control (remoteAllowed=false semantics).
+        if (!settings.isExternalControlEnabled()) {
+            return BridgeCodec.err(
+                safeId(line),
+                BridgeErrorCategory.NOT_PAIRED,
+                "external control is off",
+            )
+        }
+        val req = BridgeCodec.parseRequestLine(line)
+        return dispatcher.dispatch(req)
+    }
+
+    private fun routeV1(o: JSONObject): BridgeResponse {
+        val env = EnvelopeParser.parse(o)
+        val now = System.currentTimeMillis()
+
+        if (BridgeV1.isExpired(now, env.timestampMs, env.ttlMs)) {
+            return BridgeCodec.err(
+                env.requestId,
+                BridgeErrorCategory.INVALID_PARAMETERS,
+                "request expired",
+            )
+        }
+        if (!nonceCache.checkAndRemember(env.nonce, env.timestampMs, env.ttlMs)) {
+            return BridgeCodec.err(
+                env.requestId,
+                BridgeErrorCategory.INVALID_PARAMETERS,
+                "nonce replay or expired",
+            )
+        }
+
+        // Optional targetNodeRef match when present.
+        if (env.targetNodeRef != null && env.targetNodeRef != settings.nodeId) {
+            return BridgeCodec.err(
+                env.requestId,
+                BridgeErrorCategory.NOT_FOUND,
+                "targetNodeRef mismatch",
+            )
+        }
+
+        if (CapabilitiesRegistry.requiresExternalControl(env.op) &&
+            !settings.isExternalControlEnabled()
+        ) {
+            return BridgeCodec.err(
+                env.requestId,
+                BridgeErrorCategory.NOT_PAIRED,
+                "external control is off",
+            )
+        }
+
+        return dispatcher.dispatchV1(env)
+    }
+
     private fun rejectLine(requestLine: String, category: BridgeErrorCategory, message: String): String {
-        val id = safeId(requestLine)
+        val id = safeRequestId(requestLine)
         return BridgeCodec.encodeResponse(BridgeCodec.err(id, category, message))
     }
 
@@ -106,6 +169,20 @@ class FleetBridgeService : Service() {
         if (line.isBlank()) "_" else BridgeCodec.parseRequestLine(line).id
     } catch (_: Exception) {
         "_"
+    }
+
+    private fun safeRequestId(line: String): String {
+        return try {
+            if (line.isBlank()) return "_"
+            val o = JSONObject(line.trim())
+            when {
+                o.has("requestId") -> o.optString("requestId", "_").ifEmpty { "_" }
+                o.has("id") -> o.optString("id", "_").ifEmpty { "_" }
+                else -> "_"
+            }
+        } catch (_: Exception) {
+            "_"
+        }
     }
 
     private fun reply(replyTo: Messenger?, line: String) {
