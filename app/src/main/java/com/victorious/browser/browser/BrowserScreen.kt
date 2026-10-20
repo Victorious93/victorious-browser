@@ -48,6 +48,8 @@ import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
 import com.victorious.browser.urltools.UrlToolsDialog
 import com.victorious.browser.userscript.UserScriptInjector
+import com.victorious.browser.netid.NetIdSettings
+import com.victorious.browser.netid.SpoofInjector
 import com.victorious.browser.userscript.UserScriptStore
 
 private const val HOME_URL = "https://example.com"
@@ -315,6 +317,9 @@ fun BrowserScreen(
                     // UserScriptInjector's doc). Fallback path (onPageStarted) always
                     // reads the live store, so it stays current even without recreation.
                     UserScriptInjector.installAll(this, UserScriptStore.get(context).scripts.value)
+                    val netId = NetIdSettings.get(context)
+                    SpoofInjector.installDocumentStart(this, netId)
+                    SpoofInjector.applyUserAgent(this, netId.fingerprint.value)
                     webViewClient = VictoriousWebViewClient(
                         onUrlChanged = { url ->
                             // A real navigation away from the rendered article (e.g. a

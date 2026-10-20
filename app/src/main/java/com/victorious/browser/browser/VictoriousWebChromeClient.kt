@@ -1,10 +1,18 @@
 package com.victorious.browser.browser
 
 import android.graphics.Bitmap
+import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 
-/** Reports page title, favicon and load progress (0–100) to Compose. */
+/**
+ * Reports page title, favicon and load progress (0–100) to Compose.
+ *
+ * Geolocation: always deny the WebView→OS geolocation permission prompt.
+ * When Net ID geolocation spoofing is enabled, a document-start JS shim replaces
+ * navigator.geolocation so pages never reach this prompt for spoofed coords.
+ * Real device location is not requested (no ACCESS_FINE_LOCATION in the manifest).
+ */
 class VictoriousWebChromeClient(
     private val onProgressChanged: (Int) -> Unit,
     private val onTitleChanged: (String) -> Unit,
@@ -24,5 +32,12 @@ class VictoriousWebChromeClient(
     override fun onReceivedIcon(view: WebView?, icon: Bitmap?) {
         super.onReceivedIcon(view, icon)
         onIconChanged(icon)
+    }
+
+    override fun onGeolocationPermissionsShowPrompt(
+        origin: String?,
+        callback: GeolocationPermissions.Callback?,
+    ) {
+        callback?.invoke(origin, false, false)
     }
 }

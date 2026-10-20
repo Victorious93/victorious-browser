@@ -68,6 +68,8 @@ import com.victorious.browser.reader.ReaderModeController
 import com.victorious.browser.urltools.UrlToolsDialog
 import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.userscript.UserScriptStore
+import com.victorious.browser.netid.NetIdSettings
+import com.victorious.browser.netid.SpoofInjector
 import com.victorious.browser.panels.MeshBlockReason
 import com.victorious.browser.panels.MeshOpenDecision
 import com.victorious.browser.panels.MeshReachability
@@ -167,6 +169,9 @@ fun TabbedBrowserScreen(
             // Document-start user scripts, per tab (same as BrowserScreen). The
             // onPageStarted fallback in VictoriousWebViewClient covers the rest.
             UserScriptInjector.installAll(this, UserScriptStore.get(appContext).scripts.value)
+            val netId = NetIdSettings.get(appContext)
+            SpoofInjector.installDocumentStart(this, netId)
+            SpoofInjector.applyUserAgent(this, netId.fingerprint.value)
             webViewClient = VictoriousWebViewClient(
                 onUrlChanged = { url ->
                     if (readerTabs.onUrlChanged(tabId, url)) readerVersion++

@@ -42,6 +42,16 @@ for the developer's own traffic.
   in-scope target host and an explicit Run action, and never run on browsing
   traffic. Pure detection logic is unit-tested. (landed on `feature/burp-scanner`)
 
+- **Net ID / Spoof** — upstream proxy chaining (HTTP / SOCKS5 via LittleProxy
+  `ChainedProxyManager`; HTTPS-type stored but mapped to HTTP CONNECT — see UI),
+  HTML5 geolocation override (JS shim + WebChromeClient deny for real OS location),
+  per-session UA presets + optional fingerprint surface shims (platform, languages,
+  hardwareConcurrency, screen, timezone offset, WebGL vendor/renderer). All **off by
+  default**. **"MAC spoof" is intentionally not implemented**: a normal Android app
+  cannot change the Wi-Fi MAC; the UI surfaces randomized-MAC status read-only and
+  documents the limitation. (landed on `feature/proxy-spoof`)
+
+
 ## Fleet control bridge
 
 First-party inter-app automation: a bound **Messenger** service so the owner's
