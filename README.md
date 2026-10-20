@@ -33,6 +33,14 @@ for the developer's own traffic.
   links for public OSINT sources (crt.sh, DNS, reverse-IP, Wayback, Shodan,
   Censys, WHOIS, VirusTotal, GitHub/Google dorks, username/email lookups); passive
   tech fingerprint over already-captured responses (landed on `feature/osint-dork`)
+- **Scanner (Burp-lite web-testing toolset)** — Sitemap/crawler (site tree from
+  captured history + bounded, scope-gated same-origin crawl), opt-in active
+  scanner (reflected XSS, error/boolean/time-based SQLi, SSRF indicators per
+  insertion point), header fuzzer, CL.TE/TE.CL request-smuggling heuristic probe
+  (detection only), and a bring-your-own OOB collaborator client (no bundled
+  server). All intrusive actions are **off by default**, require an explicit
+  in-scope target host and an explicit Run action, and never run on browsing
+  traffic. Pure detection logic is unit-tested. (landed on `feature/burp-scanner`)
 
 ## Fleet control bridge
 

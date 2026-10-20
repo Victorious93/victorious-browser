@@ -71,6 +71,7 @@ fun FleetPanelScreen(
     onOpenRecon: () -> Unit = {},
     onOpenSandboxes: () -> Unit = {},
     onOpenOsint: () -> Unit = {},
+    onOpenScanner: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -155,6 +156,9 @@ fun FleetPanelScreen(
                 }
                 TextButton(onClick = onOpenOsint) {
                     Text("OSINT", color = NeonMagenta)
+                }
+                TextButton(onClick = onOpenScanner) {
+                    Text("Scanner", color = NeonCyan)
                 }
                 TextButton(onClick = onOpenNetwork) {
                     Text("Network", color = NeonCyan)
