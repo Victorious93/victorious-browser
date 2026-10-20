@@ -29,6 +29,10 @@ data class CapturedExchange(
     var requestBodyTruncated: Boolean = false,
     /** True when [responseBody] was cut to the capture size cap. */
     var responseBodyTruncated: Boolean = false,
+    // Set when ContentBlocker matched this host; the request never reached upstream.
+    // Recorded here (rather than silently dropped) so the content blocker never hides
+    // traffic from the inspection history it shares a code path with.
+    var blocked: BlockCategory? = null,
 ) {
     val durationMs: Long?
         get() = responseReceivedAt?.let { it - requestStartedAt }

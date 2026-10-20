@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -19,12 +18,16 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.victorious.browser.bridge.BridgeCommandBus
 import com.victorious.browser.bridge.BridgeDispatcher
 import com.victorious.browser.bridge.FleetControlScreen
+import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.browser.TabStore
 import com.victorious.browser.browser.TabbedBrowserScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.recon.ReconWorkbenchScreen
+import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
+import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
+import com.victorious.browser.userscript.UserScriptsScreen
 import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
@@ -33,7 +36,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeOpenUrl(intent)
-        enableEdgeToEdge()
+        enableAlwaysDarkEdgeToEdge()
         setContent {
             VictoriousBrowserTheme {
                 VictoriousBrowserApp(
@@ -60,9 +63,12 @@ class MainActivity : ComponentActivity() {
 private sealed class AppDestination {
     data object Launcher : AppDestination()
     data object Browser : AppDestination()
+    data class SandboxBrowser(val url: String, val sandbox: String) : AppDestination()
     data object Network : AppDestination()
     data object FleetControl : AppDestination()
     data object Recon : AppDestination()
+    data object Scripts : AppDestination()
+    data object Sandboxes : AppDestination()
 }
 
 @Composable
@@ -101,7 +107,7 @@ fun VictoriousBrowserApp(
         val pad = Modifier
             .fillMaxSize()
             .padding(innerPadding)
-        when (destination) {
+        when (val dest = destination) {
             AppDestination.Launcher -> FleetPanelScreen(
                 modifier = pad,
                 onOpenPanel = { panel -> openUrl(panel.url) },
@@ -109,11 +115,13 @@ fun VictoriousBrowserApp(
                 onOpenBrowser = { destination = AppDestination.Browser },
                 onOpenFleetControl = { destination = AppDestination.FleetControl },
                 onOpenRecon = { destination = AppDestination.Recon },
+                onOpenSandboxes = { destination = AppDestination.Sandboxes },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
                 modifier = pad,
                 onOpenNetwork = { destination = AppDestination.Network },
+                onOpenScripts = { destination = AppDestination.Scripts },
                 onBackToLauncher = { destination = AppDestination.Launcher },
             )
             AppDestination.Network -> NetworkHistoryScreen(
@@ -127,6 +135,25 @@ fun VictoriousBrowserApp(
             AppDestination.Recon -> ReconWorkbenchScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Scripts -> UserScriptsScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Browser },
+            )
+            is AppDestination.SandboxBrowser -> BrowserScreen(
+                modifier = pad,
+                initialUrl = dest.url,
+                sandboxName = dest.sandbox,
+                onOpenNetwork = { destination = AppDestination.Network },
+                onOpenScripts = { destination = AppDestination.Scripts },
+                onBackToLauncher = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Sandboxes -> SandboxesScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+                onOpenSandbox = { name ->
+                    destination = AppDestination.SandboxBrowser(url = "https://example.com", sandbox = name)
+                },
             )
         }
     }

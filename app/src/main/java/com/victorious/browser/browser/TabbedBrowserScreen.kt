@@ -97,6 +97,7 @@ fun TabbedBrowserScreen(
     tabStore: TabStore,
     modifier: Modifier = Modifier,
     onOpenNetwork: () -> Unit = {},
+    onOpenScripts: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -333,6 +334,10 @@ fun TabbedBrowserScreen(
                 onClick = onOpenNetwork,
                 colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
             ) { Text("Network") }
+            TextButton(
+                onClick = onOpenScripts,
+                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+            ) { Text("Scripts") }
         }
 
         val activeProgress = activeId?.let { progressMap[it] } ?: 0

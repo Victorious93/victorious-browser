@@ -66,6 +66,19 @@ object NettyRequestApplier {
         }
     }
 
+    /** Synthetic response when the content blocker matches a request's host. */
+    fun blockedResponse(category: BlockCategory): HttpResponse {
+        val body = Unpooled.copiedBuffer(
+            "Blocked by Victorious Browser content blocker (${category.label})",
+            Charsets.UTF_8,
+        )
+        val resp = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.FORBIDDEN, body)
+        resp.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=utf-8")
+        resp.headers().set(HttpHeaderNames.CONTENT_LENGTH, body.readableBytes())
+        resp.headers().set(HttpHeaderNames.CONNECTION, "close")
+        return resp
+    }
+
     /** Synthetic response when the operator drops an intercepted request. */
     fun dropResponse(): HttpResponse {
         val body = Unpooled.copiedBuffer("Request dropped by Victorious Browser intercept", Charsets.UTF_8)

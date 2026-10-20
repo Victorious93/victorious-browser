@@ -1,6 +1,8 @@
 package com.victorious.browser.panels
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
+import com.victorious.browser.liteapp.LiteAppShortcuts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,6 +69,7 @@ fun FleetPanelScreen(
     onOpenBrowser: () -> Unit,
     onOpenFleetControl: () -> Unit = {},
     onOpenRecon: () -> Unit = {},
+    onOpenSandboxes: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -146,6 +149,9 @@ fun FleetPanelScreen(
                 TextButton(onClick = onOpenRecon) {
                     Text("Recon", color = NeonCyan)
                 }
+                TextButton(onClick = onOpenSandboxes) {
+                    Text("Sandboxes", color = NeonMagenta)
+                }
                 TextButton(onClick = onOpenNetwork) {
                     Text("Network", color = NeonCyan)
                 }
@@ -203,6 +209,12 @@ fun FleetPanelScreen(
                     onOpen = { openPanel(panel) },
                     onEdit = { editing = panel },
                     onDelete = { deleting = panel },
+                    onPin = {
+                        val ok = LiteAppShortcuts.requestPin(context, panel)
+                        if (!ok) {
+                            Toast.makeText(context, "Launcher can't pin shortcuts", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                 )
             }
         }
@@ -320,6 +332,7 @@ private fun PanelCard(
     onOpen: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onPin: () -> Unit,
 ) {
     Card(
         modifier = Modifier
@@ -371,6 +384,7 @@ private fun PanelCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
+                TextButton(onClick = onPin) { Text("Pin", color = NeonCyan) }
                 TextButton(onClick = onEdit) { Text("Edit", color = NeonCyan) }
                 TextButton(onClick = onDelete) { Text("Del", color = NeonMagenta) }
             }

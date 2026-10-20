@@ -20,12 +20,17 @@ import org.littleshoot.proxy.HttpFiltersSourceAdapter
  * bodies are available for intercept edit, history detail, and search without
  * unbounded buffering.
  */
-class CaptureFiltersSource : HttpFiltersSourceAdapter() {
+class CaptureFiltersSource(
+    private val blockerSettings: ContentBlockerSettings,
+) : HttpFiltersSourceAdapter() {
 
     companion object {
         /** @deprecated Use [CaptureConfig.maxBodyBytes]; retained for callers. */
         const val MAX_REQUEST_BUFFER_BYTES = CaptureConfig.DEFAULT_MAX_BODY_BYTES
         const val MAX_RESPONSE_BUFFER_BYTES = CaptureConfig.DEFAULT_MAX_BODY_BYTES
+
+        /** Synthetic status recorded for a blocked exchange; no real server was contacted. */
+        const val BLOCKED_STATUS_CODE = -1
     }
 
     override fun getMaximumRequestBufferSizeInBytes(): Int = CaptureConfig.maxBodyBytes()
@@ -44,8 +49,22 @@ class CaptureFiltersSource : HttpFiltersSourceAdapter() {
                 if (recorded || httpObject !is HttpRequest) return null
                 recorded = true
 
-                val exchange = toExchange(id, httpObject)
+                var exchange = toExchange(id, httpObject)
+
+                // Content blocker: match before recording so a blocked request is
+                // logged as blocked, never silently dropped from the capture history.
+                val blockedBy = ContentBlocker.isBlocked(
+                    exchange.host.substringBefore(':'),
+                    blockerSettings.activeCategories(),
+                )
+                if (blockedBy != null) {
+                    exchange = exchange.copy(blocked = blockedBy, statusCode = BLOCKED_STATUS_CODE)
+                }
                 CaptureStore.record(exchange)
+
+                if (blockedBy != null) {
+                    return NettyRequestApplier.blockedResponse(blockedBy)
+                }
 
                 // CONNECT establishes the tunnel; never park it for edit.
                 if (RequestEditMerge.isConnect(httpObject.method().name())) {

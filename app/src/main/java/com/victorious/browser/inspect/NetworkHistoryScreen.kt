@@ -13,8 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -165,6 +168,46 @@ fun NetworkHistoryScreen(
                     InterceptController.setEnabled(on)
                 },
             )
+        }
+
+        val blockerSettings = remember { ContentBlockerSettings.get(context.applicationContext) }
+        val blockerOn by blockerSettings.enabled.collectAsState()
+        val blockerCategories by blockerSettings.categories.collectAsState()
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Content blocker", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    if (blockerOn) "Blocking ${blockerCategories.size} categor${if (blockerCategories.size == 1) "y" else "ies"}"
+                    else "Off",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = blockerOn, onCheckedChange = { blockerSettings.setEnabled(it) })
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            BlockCategory.entries.forEach { category ->
+                FilterChip(
+                    selected = category in blockerCategories,
+                    onClick = { blockerSettings.setCategoryEnabled(category, category !in blockerCategories) },
+                    label = { Text(category.label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
+                        selectedLabelColor = NeonCyan,
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                )
+            }
         }
 
         Row(
@@ -332,7 +375,12 @@ private fun ExchangeRow(ex: CapturedExchange, onClick: () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("${ex.method} ${ex.statusCode ?: "…"}", color = NeonCyan, style = MaterialTheme.typography.labelLarge)
+                val blocked = ex.blocked
+                Text(
+                    if (blocked != null) "${ex.method} BLOCKED (${blocked.label})" else "${ex.method} ${ex.statusCode ?: "…"}",
+                    color = if (blocked != null) NeonMagenta else NeonCyan,
+                    style = MaterialTheme.typography.labelLarge,
+                )
                 Text(
                     "${ex.responseBytes} B · ${ex.durationMs ?: "—"} ms",
                     style = MaterialTheme.typography.labelSmall,
