@@ -140,3 +140,13 @@ Fleet export — no third-party endpoints bundled
 The export "fleet sink" posts a generic, secret-stripped JSON payload to a
 USER-SUPPLIED endpoint. The HackerAI-Commander / Pentest-Swarm-AI API contracts
 are NOT confirmed and NOT bundled; the target URL and auth are user-configured.
+
+-----------------------------------------------------------------------------
+Batch G (feature/cert-evidence) — no new third-party dependencies.
+
+The inspection-CA export/install helper and the recon evidence logger add no new
+libraries. CA material reuses the existing Bouncy Castle dependency; evidence
+ZIPs use the JDK's java.util.zip; screenshots use the Android framework Bitmap/
+Canvas; report/index files use the already-bundled org.json. CA/evidence exports
+to Downloads use the Android MediaStore framework API (no dependency).
+

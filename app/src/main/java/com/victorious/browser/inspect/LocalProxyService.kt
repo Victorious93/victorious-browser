@@ -60,7 +60,7 @@ object LocalProxyService {
             // network_security_config (no system-wide install).
             // Apply any persisted upstream chain before bootstrap (off by default).
             UpstreamChain.set(NetIdSettings.get(context).upstream.value)
-            val authority = LocalCertificateAuthority.load(context, CA_PASSWORD)
+            val authority = com.victorious.browser.certmgr.LocalCaProvider.loadAuthority(context)
             val mitm = LocalMitmManager(authority)
             val listen = InetSocketAddress("127.0.0.1", preferredPort)
 

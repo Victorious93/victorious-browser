@@ -76,6 +76,8 @@ fun FleetPanelScreen(
     onOpenFuzz: () -> Unit = {},
     onOpenExport: () -> Unit = {},
     onOpenMsf: () -> Unit = {},
+    onOpenCerts: () -> Unit = {},
+    onOpenEvidence: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -172,6 +174,12 @@ fun FleetPanelScreen(
                 }
                 TextButton(onClick = onOpenMsf) {
                     Text("MSF", color = NeonMagenta)
+                }
+                TextButton(onClick = onOpenCerts) {
+                    Text("Certs", color = NeonCyan)
+                }
+                TextButton(onClick = onOpenEvidence) {
+                    Text("Evidence", color = NeonMagenta)
                 }
                 TextButton(onClick = onOpenExport) {
                     Text("Export", color = NeonCyan)

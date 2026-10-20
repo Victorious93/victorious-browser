@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Read-only Wi-Fi state for Net ID MAC status (no MAC change capability). -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Legacy (API <=28) write to public Downloads for CA / evidence exports.
+         On API 29+ exports use MediaStore scoped storage and need no permission. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="true"
