@@ -25,6 +25,7 @@ import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.osint.OsintScreen
 import com.victorious.browser.recon.ReconWorkbenchScreen
+import com.victorious.browser.scanner.ScannerScreen
 import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
@@ -71,6 +72,7 @@ private sealed class AppDestination {
     data object Scripts : AppDestination()
     data object Sandboxes : AppDestination()
     data object Osint : AppDestination()
+    data object Scanner : AppDestination()
 }
 
 @Composable
@@ -119,6 +121,7 @@ fun VictoriousBrowserApp(
                 onOpenRecon = { destination = AppDestination.Recon },
                 onOpenSandboxes = { destination = AppDestination.Sandboxes },
                 onOpenOsint = { destination = AppDestination.Osint },
+                onOpenScanner = { destination = AppDestination.Scanner },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
@@ -144,6 +147,10 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
                 onOpenUrl = { url -> openUrl(url) },
+            )
+            AppDestination.Scanner -> ScannerScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
             )
             AppDestination.Scripts -> UserScriptsScreen(
                 modifier = pad,

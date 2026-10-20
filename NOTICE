@@ -69,3 +69,20 @@ Lightning Browser is licensed under the Mozilla Public License 2.0 (MPL-2.0).
 No Lightning Browser source files are copied verbatim into this repository;
 this notice acknowledges conceptual inspiration only.
 https://www.mozilla.org/en-US/MPL/2.0/
+
+-----------------------------------------------------------------------------
+Scanner payload / detection ideas — OWASP & sqlmap (conceptual, no code copied)
+The Scanner module (app/src/main/java/com/victorious/browser/scanner/) uses
+small, well-known probe strings and DBMS error-fingerprint patterns that are
+common public knowledge, as documented in:
+  - OWASP Web Security Testing Guide (XSS / SQLi / SSRF test categories)
+    https://owasp.org/www-project-web-security-testing-guide/
+    License: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
+  - sqlmap SQL error-message fingerprints (DBMS error signatures, as popularized
+    by the project) https://github.com/sqlmapproject/sqlmap
+    License: GNU GPL v2
+No source files or data files from these projects are copied into this
+repository; the signatures were re-expressed independently and this notice
+credits the conceptual origin and their licenses.
+The OOB collaborator client is interactsh-compatible by configuration only; no
+interactsh (ProjectDiscovery, MIT) code is bundled or vendored.
