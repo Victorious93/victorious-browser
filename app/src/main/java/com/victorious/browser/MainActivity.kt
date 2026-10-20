@@ -30,6 +30,8 @@ import com.victorious.browser.netid.NetIdScreen
 import com.victorious.browser.fuzz.FuzzScreen
 import com.victorious.browser.export.ExportScreen
 import com.victorious.browser.export.FleetExportStaging
+import com.victorious.browser.certmgr.CertScreen
+import com.victorious.browser.evidence.EvidenceScreen
 import com.victorious.browser.msf.MsfConsoleScreen
 import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
@@ -82,6 +84,8 @@ private sealed class AppDestination {
     data object Fuzz : AppDestination()
     data object Export : AppDestination()
     data object Msf : AppDestination()
+    data object Certs : AppDestination()
+    data object Evidence : AppDestination()
 }
 
 @Composable
@@ -135,6 +139,8 @@ fun VictoriousBrowserApp(
                 onOpenFuzz = { destination = AppDestination.Fuzz },
                 onOpenExport = { destination = AppDestination.Export },
                 onOpenMsf = { destination = AppDestination.Msf },
+                onOpenCerts = { destination = AppDestination.Certs },
+                onOpenEvidence = { destination = AppDestination.Evidence },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
@@ -183,6 +189,14 @@ fun VictoriousBrowserApp(
                 onBack = { destination = AppDestination.Launcher },
             )
             AppDestination.Msf -> MsfConsoleScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Certs -> CertScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Evidence -> EvidenceScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )

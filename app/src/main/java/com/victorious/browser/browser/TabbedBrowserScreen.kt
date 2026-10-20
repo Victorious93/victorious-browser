@@ -3,6 +3,8 @@ package com.victorious.browser.browser
 import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.WebView
+import com.victorious.browser.evidence.EvidenceStore
+import com.victorious.browser.evidence.WebViewCapture
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -414,6 +416,27 @@ fun TabbedBrowserScreen(
                 onClick = { showInject = true },
                 colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
             ) { Text("Inject") }
+            TextButton(
+                onClick = {
+                    val id = activeId
+                    val wv = id?.let { webViews[it] }
+                    if (wv == null) {
+                        Toast.makeText(appContext, "No active page to capture", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val bmp = WebViewCapture.capture(wv)
+                        if (bmp == null) {
+                            Toast.makeText(appContext, "Capture failed", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val store = EvidenceStore.get(appContext)
+                            val case = store.ensureActiveCase()
+                            val host = hostOf(tabStore.get(id)?.url ?: wv.url.orEmpty()).orEmpty()
+                            store.addScreenshot(case.id, bmp, host = host, title = host.ifEmpty { "screenshot" })
+                            Toast.makeText(appContext, "Saved to evidence: " + case.name, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+            ) { Text("Shot") }
         }
 
         val activeProgress = activeId?.let { progressMap[it] } ?: 0

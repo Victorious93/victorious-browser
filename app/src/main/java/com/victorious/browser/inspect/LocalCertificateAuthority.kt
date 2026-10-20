@@ -106,6 +106,25 @@ class LocalCertificateAuthority private constructor(
          * lives in res/raw/inspect_root.pem and is trusted only by this app via
          * network_security_config.
          */
+        /**
+         * Load a CA from an arbitrary PKCS12 [InputStream] (alias "root"). Used by
+         * the cert-management regenerate flow so a regenerated root persisted to the
+         * app files dir can drive the inspection proxy on next start.
+         */
+        fun loadFromStream(
+            input: java.io.InputStream,
+            password: CharArray,
+        ): LocalCertificateAuthority {
+            @Suppress("UNUSED_VARIABLE")
+            val _p = PROVIDER
+            val ks = KeyStore.getInstance("PKCS12")
+            input.use { ks.load(it, password) }
+            val key = ks.getKey("root", password) as PrivateKey
+            val cert = ks.getCertificate("root") as X509Certificate
+            val keyGen = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }
+            return LocalCertificateAuthority(cert, key, keyGen)
+        }
+
         fun load(context: Context, password: CharArray): LocalCertificateAuthority {
             // Touch provider so BouncyCastle is registered before we use it.
             @Suppress("UNUSED_VARIABLE")

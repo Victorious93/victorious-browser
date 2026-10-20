@@ -75,6 +75,28 @@ for the developer's own traffic.
   substitution, filter matching, dedup, YAML parsing, matcher evaluation,
   wordlist parsing) is unit-tested. (landed on `feature/fuzz-templates`)
 
+- **Inspection CA export/install + Evidence logger** — a **Certs** screen to
+  export the local inspection root (the BouncyCastle CA the intercepting proxy
+  uses for per-host leaf certs) to Downloads as **`.pem`** and **`.crt`/DER**,
+  show its **SHA-256 fingerprint**, launch the **guided (manual) OS install**
+  flow (`KeyChain.createInstallIntent()` with a fallback to
+  `Settings.ACTION_SECURITY_SETTINGS`), and optionally **regenerate** the root
+  (confirmation-gated; persists to app files dir and takes effect on next proxy
+  start — **invalidates any previously exported/installed CA**). Honest by design:
+  Android cannot silently install a user CA, and apps targeting modern Android do
+  **not** trust user-installed CAs — this browser trusts the local root for its
+  OWN WebView only (via `network_security_config`); other apps will not. Only the
+  **public** certificate is ever exported — never the private key. An **Evidence**
+  screen + per-page browser **"Shot"** toolbar action capture recon evidence into
+  timestamped **cases** (one folder per case under app files dir, JSON index per
+  case): screenshots (WebView→PNG), **secret-stripped** request/response
+  exchanges (reuses the fleet `SecretStripper` — no cookies/auth/proxy-creds/
+  tokens/certs), scanner findings, and notes. A case exports as a **ZIP**
+  (screenshots + generated **Markdown & HTML** report + `index.json`) to Downloads
+  via MediaStore/SAF. Pure logic (PEM/DER encoding, fingerprint formatting, case
+  index serialization, report generation, filename sanitization, exchange
+  stripping) is unit-tested. (landed on `feature/cert-evidence`)
+
 
 ## Fleet export + Metasploit RPC
 
@@ -444,6 +466,16 @@ Debug APK: `app/build/outputs/apk/debug/app-debug.apk`
 Debug signing uses the committed `app/debug.keystore` (alias `androiddebugkey`,
 passwords `android`/`android`) so fleet installs update cleanly over prior builds.
 Release signing is left to CI secrets — no release key is committed.
+
+## Permissions
+
+- `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` (read-only) — as before.
+- `WRITE_EXTERNAL_STORAGE` (**`maxSdkVersion=28`**) — only for the legacy
+  (API ≤ 28) path that writes CA / evidence exports into the public Downloads
+  folder. On API 29+ exports use **MediaStore** scoped storage and require **no**
+  runtime permission. No new runtime-dangerous permission is requested on modern
+  Android. Screenshot capture draws this app's OWN WebView to a `Bitmap` (no
+  `MediaProjection`, no camera permission).
 
 ## Requirements
 
