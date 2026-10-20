@@ -118,3 +118,25 @@ Minimal YAML parser
 app/src/main/java/com/victorious/browser/fuzz/MiniYaml.kt is a hand-rolled
 minimal indentation parser written for this project to avoid adding a YAML
 dependency. No third-party YAML library is bundled.
+
+-----------------------------------------------------------------------------
+Fleet export + Metasploit RPC module
+(app/src/main/java/com/victorious/browser/export/ and .../msf/)
+
+Minimal MessagePack codec
+app/src/main/java/com/victorious/browser/msf/MsgPack.kt is a hand-rolled,
+first-party minimal MessagePack encoder/decoder (nil/bool/int/float/str/bin/
+array/map) written for this project to drive the Metasploit msgrpc interface.
+No third-party MessagePack library (e.g. org.msgpack:msgpack-core) is bundled
+or depended on.
+
+Metasploit RPC — interface referenced, no code vendored
+The MSF RPC client targets the publicly documented Metasploit msgrpc interface
+(msgpack over HTTP, /api/1.0/). No Metasploit (Rapid7) source is included.
+  - Metasploit Framework (https://github.com/rapid7/metasploit-framework)
+    License: BSD-3-Clause — referenced for the msgrpc wire interface only.
+
+Fleet export — no third-party endpoints bundled
+The export "fleet sink" posts a generic, secret-stripped JSON payload to a
+USER-SUPPLIED endpoint. The HackerAI-Commander / Pentest-Swarm-AI API contracts
+are NOT confirmed and NOT bundled; the target URL and auth are user-configured.

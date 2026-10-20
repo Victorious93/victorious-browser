@@ -51,6 +51,7 @@ import com.victorious.browser.ui.theme.NeonMagenta
 @Composable
 fun NetworkHistoryScreen(
     onBack: () -> Unit,
+    onSendToFleet: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -228,6 +229,7 @@ fun NetworkHistoryScreen(
                     showModify = true
                 },
             ) { Text("Modify / Replay") }
+            Button(onClick = onSendToFleet) { Text("Send to fleet") }
         }
 
         Spacer(Modifier.height(8.dp))

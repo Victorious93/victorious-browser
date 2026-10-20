@@ -28,6 +28,9 @@ import com.victorious.browser.recon.ReconWorkbenchScreen
 import com.victorious.browser.scanner.ScannerScreen
 import com.victorious.browser.netid.NetIdScreen
 import com.victorious.browser.fuzz.FuzzScreen
+import com.victorious.browser.export.ExportScreen
+import com.victorious.browser.export.FleetExportStaging
+import com.victorious.browser.msf.MsfConsoleScreen
 import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
@@ -77,6 +80,8 @@ private sealed class AppDestination {
     data object Scanner : AppDestination()
     data object NetId : AppDestination()
     data object Fuzz : AppDestination()
+    data object Export : AppDestination()
+    data object Msf : AppDestination()
 }
 
 @Composable
@@ -128,6 +133,8 @@ fun VictoriousBrowserApp(
                 onOpenScanner = { destination = AppDestination.Scanner },
                 onOpenNetId = { destination = AppDestination.NetId },
                 onOpenFuzz = { destination = AppDestination.Fuzz },
+                onOpenExport = { destination = AppDestination.Export },
+                onOpenMsf = { destination = AppDestination.Msf },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
@@ -139,6 +146,7 @@ fun VictoriousBrowserApp(
             AppDestination.Network -> NetworkHistoryScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
+                onSendToFleet = { destination = AppDestination.Export },
             )
             AppDestination.FleetControl -> FleetControlScreen(
                 modifier = pad,
@@ -157,12 +165,24 @@ fun VictoriousBrowserApp(
             AppDestination.Scanner -> ScannerScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
+                onSendToFleet = { findings ->
+                    FleetExportStaging.stage(findings = findings)
+                    destination = AppDestination.Export
+                },
             )
             AppDestination.NetId -> NetIdScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )
             AppDestination.Fuzz -> FuzzScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Export -> ExportScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Msf -> MsfConsoleScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )
