@@ -1,0 +1,43 @@
+# Victorious Browser — curated starter file wordlist
+# Lineage: small hand-picked subset inspired by SecLists Discovery/Web-Content
+# (SecLists is MIT-licensed; credited in NOTICE). Import full SecLists yourself.
+robots.txt
+sitemap.xml
+.htaccess
+.htpasswd
+.env
+.env.local
+.env.backup
+config.php
+config.json
+config.yml
+config.yaml
+settings.py
+web.config
+app.config
+database.yml
+docker-compose.yml
+Dockerfile
+package.json
+composer.json
+composer.lock
+yarn.lock
+.gitignore
+.git/config
+.git/HEAD
+.DS_Store
+backup.zip
+backup.sql
+dump.sql
+db.sql
+phpinfo.php
+info.php
+test.php
+readme.md
+README.md
+CHANGELOG.md
+LICENSE
+id_rsa
+.npmrc
+.dockercfg
+credentials.json

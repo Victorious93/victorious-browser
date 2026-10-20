@@ -1,0 +1,17 @@
+id: ds-store-exposed
+info:
+  name: Exposed .DS_Store file
+  severity: low
+requests:
+  - method: GET
+    path: /.DS_Store
+matchers:
+  - type: status
+    values:
+      - 200
+  - type: word
+    part: body
+    condition: or
+    values:
+      - "Bud1"
+matchers-condition: and

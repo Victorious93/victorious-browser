@@ -51,6 +51,21 @@ for the developer's own traffic.
   cannot change the Wi-Fi MAC; the UI surfaces randomized-MAC status read-only and
   documents the limitation. (landed on `feature/proxy-spoof`)
 
+- **Fuzz / Templates** — ffuf-style directory/endpoint brute-forcer (FUZZ-marker
+  or append mode, wordlist + extensions, concurrency cap, status/size/word/line
+  filters, live dedup'd results table with pause/stop), a Nuclei-**compatible-subset**
+  template scanner (hand-rolled minimal YAML parser; templates with
+  id/info/requests/matchers where matchers are status|word|regex|size over
+  body|header|status with and|or conditions — NOT full Nuclei: no DSL, extractors,
+  workflows, payloads, or variables), and a SecLists-style wordlist library
+  (import from file/paste/URL, store/list/preview/delete; small curated starter
+  lists bundled, full SecLists NOT bundled — import your own). Both runners reuse
+  `ReplayClient` and are **scope-gated** on the shared `ScannerConfig` allowlist:
+  off by default, require an explicit in-scope host and explicit Run, never run on
+  browsing traffic, with default/max concurrency caps. Pure logic (FUZZ
+  substitution, filter matching, dedup, YAML parsing, matcher evaluation,
+  wordlist parsing) is unit-tested. (landed on `feature/fuzz-templates`)
+
 
 ## Fleet control bridge
 

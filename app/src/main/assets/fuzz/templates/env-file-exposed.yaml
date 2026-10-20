@@ -1,0 +1,18 @@
+id: env-file-exposed
+info:
+  name: Exposed .env file
+  severity: high
+requests:
+  - method: GET
+    path: /.env
+matchers:
+  - type: status
+    values:
+      - 200
+  - type: regex
+    part: body
+    condition: or
+    values:
+      - "(?i)^[A-Z0-9_]+=.*"
+      - "(?i)(APP_KEY|DB_PASSWORD|SECRET|AWS_ACCESS_KEY_ID)="
+matchers-condition: and
