@@ -1,5 +1,6 @@
 package com.victorious.browser.osint
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -56,14 +57,7 @@ fun OsintScreen(
     val tabs = listOf("Dork Builder", "OSINT Panel", "Fingerprint")
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("OSINT & Dork Builder", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "OSINT & Dork Builder", onBack = onBack)
         Text(
             "Builds queries and public-source links for your own authorized targets. " +
                 "The app never auto-scrapes — you open each link in a tab.",

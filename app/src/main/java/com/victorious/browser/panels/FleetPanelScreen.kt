@@ -1,6 +1,7 @@
 package com.victorious.browser.panels
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.victorious.browser.liteapp.LiteAppShortcuts
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +18,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -79,6 +96,7 @@ fun FleetPanelScreen(
     onOpenCerts: () -> Unit = {},
     onOpenEvidence: () -> Unit = {},
     onOpenAntiPhish: () -> Unit = {},
+    onOpenHome: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -136,123 +154,186 @@ fun FleetPanelScreen(
         }
     }
 
-    Column(
+    val cyan = com.victorious.browser.ui.theme.NeonCyan
+    val magenta = com.victorious.browser.ui.theme.NeonMagenta
+    val violet = com.victorious.browser.ui.theme.NeonViolet
+
+    data class Tool(
+        val title: String,
+        val desc: String,
+        val icon: androidx.compose.ui.graphics.vector.ImageVector,
+        val accent: Color,
+        val onClick: () -> Unit,
+    )
+    data class ToolGroup(val name: String, val tools: List<Tool>)
+
+    val groups = listOf(
+        ToolGroup(
+            "Browse",
+            listOf(
+                Tool("Browser", "Tabbed browser shell", Icons.Filled.Home, cyan, onOpenBrowser),
+                Tool("Sandboxes", "Isolated browsing sandboxes", Icons.Filled.Build, cyan, onOpenSandboxes),
+            ),
+        ),
+        ToolGroup(
+            "Recon",
+            listOf(
+                Tool("Recon", "Encoders, hashes, URL tools", Icons.Filled.Search, cyan, onOpenRecon),
+                Tool("OSINT", "Sources, dorks, fingerprints", Icons.Filled.Place, cyan, onOpenOsint),
+            ),
+        ),
+        ToolGroup(
+            "Offense / Testing",
+            listOf(
+                Tool("Scanner", "Active & passive vuln scanner", Icons.Filled.Warning, magenta, onOpenScanner),
+                Tool("Fuzz", "Brute-force & template scan", Icons.Filled.Refresh, magenta, onOpenFuzz),
+                Tool("Metasploit", "MSF RPC console", Icons.Filled.Settings, magenta, onOpenMsf),
+            ),
+        ),
+        ToolGroup(
+            "Net ID",
+            listOf(
+                Tool("Net ID / Spoof", "UA, MAC & geo identity", Icons.Filled.Face, violet, onOpenNetId),
+            ),
+        ),
+        ToolGroup(
+            "Fleet",
+            listOf(
+                Tool("Control", "Remote fleet control", Icons.Filled.Notifications, magenta, onOpenFleetControl),
+                Tool("Export", "Fleet export sink", Icons.Filled.Share, magenta, onOpenExport),
+                Tool("Network", "Intercept & history log", Icons.AutoMirrored.Filled.List, cyan, onOpenNetwork),
+            ),
+        ),
+        ToolGroup(
+            "Defense",
+            listOf(
+                Tool("Certs", "Inspection CA & certs", Icons.Filled.Lock, cyan, onOpenCerts),
+                Tool("Evidence", "Capture evidence log", Icons.Filled.DateRange, cyan, onOpenEvidence),
+                Tool("Anti-Phish", "Phishing awareness", Icons.Filled.CheckCircle, cyan, onOpenAntiPhish),
+            ),
+        ),
+    )
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 158.dp),
         modifier = modifier
             .fillMaxSize()
-            .padding(12.dp),
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 12.dp),
+        contentPadding = PaddingValues(vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                "Fleet Panels",
-                style = MaterialTheme.typography.titleLarge,
-                color = NeonMagenta,
-            )
-            Row {
-                TextButton(onClick = onOpenFleetControl) {
-                    Text("Control", color = NeonMagenta)
-                }
-                TextButton(onClick = onOpenRecon) {
-                    Text("Recon", color = NeonCyan)
-                }
-                TextButton(onClick = onOpenSandboxes) {
-                    Text("Sandboxes", color = NeonMagenta)
-                }
-                TextButton(onClick = onOpenOsint) {
-                    Text("OSINT", color = NeonMagenta)
-                }
-                TextButton(onClick = onOpenScanner) {
-                    Text("Scanner", color = NeonCyan)
-                }
-                TextButton(onClick = onOpenNetId) {
-                    Text("Net ID", color = NeonCyan)
-                }
-                TextButton(onClick = onOpenFuzz) {
-                    Text("Fuzz", color = NeonMagenta)
-                }
-                TextButton(onClick = onOpenMsf) {
-                    Text("MSF", color = NeonMagenta)
-                }
-                TextButton(onClick = onOpenCerts) {
-                    Text("Certs", color = NeonCyan)
-                }
-                TextButton(onClick = onOpenEvidence) {
-                    Text("Evidence", color = NeonMagenta)
-                }
-                TextButton(onClick = onOpenAntiPhish) {
-                    Text("Anti-Phish", color = NeonCyan)
-                }
-                TextButton(onClick = onOpenExport) {
-                    Text("Export", color = NeonCyan)
-                }
-                TextButton(onClick = onOpenNetwork) {
-                    Text("Network", color = NeonCyan)
-                }
-                TextButton(onClick = onOpenBrowser) {
-                    Text("Browser", color = NeonCyan)
+        // Hero
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.victorious.browser.ui.components.BrandRing(size = 60.dp, strokeWidth = 5.dp)
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    com.victorious.browser.ui.components.GradientTitle("Victorious")
+                    Text(
+                        "Fleet security & recon browser",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    com.victorious.browser.ui.components.QuickAction(
+                        "Home",
+                        Icons.Filled.Home,
+                        NeonCyan,
+                        onClick = onOpenHome,
+                    )
                 }
             }
         }
 
-        Text(
-            "Owner dashboards. Mesh panels resolve over Victorious Mesh " +
-                "(tunnel provided by that app — this browser does not hold VpnService).",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (!meshAppInstalled) {
-            Text(
-                "Victorious Mesh app not detected on this device " +
-                    "(looked for ${MeshReachability.MESH_PACKAGE_CANDIDATES.joinToString()}). " +
-                    "Mesh panels will still probe; install Mesh for live routing.",
-                style = MaterialTheme.typography.labelSmall,
-                color = NeonMagenta,
-            )
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { adding = true }) { Text("Add panel") }
-            Button(
-                onClick = {
-                    panels.forEach { p ->
-                        reachability[p.id] = Reachability.UNKNOWN
-                        scope.launch {
-                            reachability[p.id] = probeRow(p)
-                        }
-                    }
-                },
-            ) { Text("Recheck") }
-        }
-
-        Spacer(Modifier.height(8.dp))
-
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 160.dp),
-            contentPadding = PaddingValues(4.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(panels, key = { it.id }) { panel ->
-                PanelCard(
-                    panel = panel,
-                    reachability = reachability[panel.id] ?: Reachability.UNKNOWN,
-                    onOpen = { openPanel(panel) },
-                    onEdit = { editing = panel },
-                    onDelete = { deleting = panel },
-                    onPin = {
-                        val ok = LiteAppShortcuts.requestPin(context, panel)
-                        if (!ok) {
-                            Toast.makeText(context, "Launcher can't pin shortcuts", Toast.LENGTH_SHORT).show()
-                        }
-                    },
+        groups.forEach { group ->
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                com.victorious.browser.ui.components.NeonSectionHeader(
+                    group.name,
+                    modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
                 )
             }
+            items(group.tools, key = { it.title }) { tool ->
+                com.victorious.browser.ui.components.ToolTile(
+                    title = tool.title,
+                    description = tool.desc,
+                    icon = tool.icon,
+                    accent = tool.accent,
+                    onClick = tool.onClick,
+                )
+            }
+        }
+
+        // Fleet Panels section
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column {
+                Spacer(Modifier.height(6.dp))
+                com.victorious.browser.ui.components.NeonSectionHeader("Fleet Panels")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Owner dashboards. Mesh panels resolve over Victorious Mesh " +
+                        "(tunnel provided by that app — this browser does not hold VpnService).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (!meshAppInstalled) {
+                    Text(
+                        "Victorious Mesh app not detected on this device " +
+                            "(looked for ${MeshReachability.MESH_PACKAGE_CANDIDATES.joinToString()}). " +
+                            "Mesh panels will still probe; install Mesh for live routing.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NeonMagenta,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.victorious.browser.ui.components.NeonButton("Add panel", onClick = { adding = true })
+                    com.victorious.browser.ui.components.NeonOutlineButton(
+                        "Recheck",
+                        onClick = {
+                            panels.forEach { p ->
+                                reachability[p.id] = Reachability.UNKNOWN
+                                scope.launch { reachability[p.id] = probeRow(p) }
+                            }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+        }
+
+        if (panels.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                com.victorious.browser.ui.components.GradientCard(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        "No fleet panels yet",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        "Add a locally-hosted or mesh dashboard to pin it here.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        items(panels, key = { it.id }) { panel ->
+            PanelCard(
+                panel = panel,
+                reachability = reachability[panel.id] ?: Reachability.UNKNOWN,
+                onOpen = { openPanel(panel) },
+                onEdit = { editing = panel },
+                onDelete = { deleting = panel },
+                onPin = {
+                    val ok = LiteAppShortcuts.requestPin(context, panel)
+                    if (!ok) {
+                        Toast.makeText(context, "Launcher can't pin shortcuts", Toast.LENGTH_SHORT).show()
+                    }
+                },
+            )
         }
     }
 

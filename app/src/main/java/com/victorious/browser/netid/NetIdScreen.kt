@@ -1,5 +1,6 @@
 package com.victorious.browser.netid
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -49,14 +50,7 @@ fun NetIdScreen(
     val tabs = listOf("Upstream", "Location", "UA / FP", "MAC")
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Net ID / Spoof", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Net ID / Spoof", onBack = onBack)
         Text(
             "All features OFF by default. Changes apply to new WebView tabs / after " +
                 "restarting the local inspection proxy for upstream chaining.",

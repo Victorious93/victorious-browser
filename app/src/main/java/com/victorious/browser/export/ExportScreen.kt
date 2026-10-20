@@ -1,5 +1,6 @@
 package com.victorious.browser.export
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -82,14 +83,7 @@ fun ExportScreen(
             .padding(12.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Export to fleet", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Export to fleet", onBack = onBack)
         Text(
             "Push captured endpoints / recon / scanner findings to other fleet tools " +
                 "(HackerAI-Commander, Pentest-Swarm-AI). Cookies, passwords, proxy creds " +

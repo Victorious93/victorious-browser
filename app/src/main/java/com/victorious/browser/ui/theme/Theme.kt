@@ -8,15 +8,29 @@ import androidx.compose.ui.graphics.Color
 private val VictoriousDarkColorScheme = darkColorScheme(
     primary = NeonCyan,
     onPrimary = Color.Black,
+    primaryContainer = CharcoalHigh,
+    onPrimaryContainer = NeonCyan,
     secondary = NeonMagenta,
     onSecondary = Color.Black,
-    tertiary = NeonCyan,
+    secondaryContainer = CharcoalHigh,
+    onSecondaryContainer = NeonMagenta,
+    tertiary = NeonViolet,
+    onTertiary = Color.Black,
     background = Charcoal,
     onBackground = OnDark,
     surface = CharcoalElevated,
     onSurface = OnDark,
-    surfaceVariant = CharcoalElevated,
+    surfaceVariant = CharcoalHigh,
     onSurfaceVariant = OnDarkMuted,
+    surfaceContainerLowest = CharcoalBase,
+    surfaceContainerLow = Charcoal,
+    surfaceContainer = CharcoalElevated,
+    surfaceContainerHigh = CharcoalHigh,
+    surfaceContainerHighest = CharcoalLine,
+    outline = CharcoalLine,
+    outlineVariant = CharcoalLine,
+    error = StatusDanger,
+    onError = Color.Black,
 )
 
 @Composable
@@ -26,6 +40,7 @@ fun VictoriousBrowserTheme(
     MaterialTheme(
         colorScheme = VictoriousDarkColorScheme,
         typography = Typography,
+        shapes = Shapes,
         content = content,
     )
 }

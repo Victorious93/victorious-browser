@@ -1,5 +1,6 @@
 package com.victorious.browser.certmgr
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -69,14 +70,7 @@ fun CertScreen(
             .padding(12.dp)
             .verticalScroll(rememberScrollState()),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Inspection CA", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Inspection CA", onBack = onBack)
         Text(
             "Export and (manually) install the local inspection root used by the " +
                 "intercepting proxy. This browser already trusts it for its OWN WebView " +

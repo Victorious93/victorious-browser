@@ -1,5 +1,6 @@
 package com.victorious.browser.fuzz
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -59,14 +60,7 @@ fun FuzzScreen(
     val tabs = listOf("Dir Brute", "Templates", "Wordlists")
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Fuzz / Templates", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
-        }
+        NeonToolHeader(title = "Fuzz / Templates", onBack = onBack)
         Text(
             "ffuf-style brute-force + Nuclei-compatible-subset template scanner for your " +
                 "own authorized targets. Runs are off by default, require an in-scope host " +

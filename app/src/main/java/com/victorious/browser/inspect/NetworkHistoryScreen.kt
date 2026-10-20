@@ -1,5 +1,6 @@
 package com.victorious.browser.inspect
 
+import com.victorious.browser.ui.components.NeonToolHeader
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -98,18 +99,7 @@ fun NetworkHistoryScreen(
             .fillMaxSize()
             .padding(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(onClick = onBack) { Text("← Browser", color = NeonCyan) }
-            Text(
-                "Network / History",
-                style = MaterialTheme.typography.titleMedium,
-                color = NeonMagenta,
-            )
-        }
+        NeonToolHeader(title = "Network / History", onBack = onBack)
 
         Spacer(Modifier.height(8.dp))
 
