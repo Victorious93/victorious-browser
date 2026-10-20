@@ -19,8 +19,11 @@ import com.victorious.browser.bridge.BridgeCommandBus
 import com.victorious.browser.bridge.BridgeDispatcher
 import com.victorious.browser.bridge.FleetControlScreen
 import com.victorious.browser.browser.BrowserScreen
+import com.victorious.browser.browser.TabStore
+import com.victorious.browser.browser.TabbedBrowserScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.panels.FleetPanelScreen
+import com.victorious.browser.recon.ReconWorkbenchScreen
 import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
@@ -59,10 +62,12 @@ class MainActivity : ComponentActivity() {
 
 private sealed class AppDestination {
     data object Launcher : AppDestination()
-    data class Browser(val url: String, val sandbox: String? = null) : AppDestination()
+    data object Browser : AppDestination()
+    data class SandboxBrowser(val url: String, val sandbox: String) : AppDestination()
     data object Network : AppDestination()
     data object FleetControl : AppDestination()
-    data class Scripts(val returnUrl: String) : AppDestination()
+    data object Recon : AppDestination()
+    data object Scripts : AppDestination()
     data object Sandboxes : AppDestination()
 }
 
@@ -72,20 +77,26 @@ fun VictoriousBrowserApp(
     onPendingConsumed: () -> Unit = {},
 ) {
     var destination by remember { mutableStateOf<AppDestination>(AppDestination.Launcher) }
+    val tabStore = remember { TabStore() }
+
+    fun openUrl(url: String) {
+        tabStore.openTab(url)
+        destination = AppDestination.Browser
+    }
 
     // Bridge-driven opens (service → UI).
     LaunchedEffect(Unit) {
         BridgeCommandBus.commands.collectLatest { cmd ->
             when (cmd) {
                 is BridgeCommandBus.Command.OpenUrl -> {
-                    destination = AppDestination.Browser(cmd.url)
+                    openUrl(cmd.url)
                 }
             }
         }
     }
     LaunchedEffect(pendingOpenUrl) {
         val url = pendingOpenUrl ?: return@LaunchedEffect
-        destination = AppDestination.Browser(url)
+        openUrl(url)
         onPendingConsumed()
     }
 
@@ -99,18 +110,18 @@ fun VictoriousBrowserApp(
         when (val dest = destination) {
             AppDestination.Launcher -> FleetPanelScreen(
                 modifier = pad,
-                onOpenPanel = { panel -> destination = AppDestination.Browser(panel.url) },
+                onOpenPanel = { panel -> openUrl(panel.url) },
                 onOpenNetwork = { destination = AppDestination.Network },
-                onOpenBrowser = { destination = AppDestination.Browser("https://example.com") },
+                onOpenBrowser = { destination = AppDestination.Browser },
                 onOpenFleetControl = { destination = AppDestination.FleetControl },
+                onOpenRecon = { destination = AppDestination.Recon },
                 onOpenSandboxes = { destination = AppDestination.Sandboxes },
             )
-            is AppDestination.Browser -> BrowserScreen(
+            AppDestination.Browser -> TabbedBrowserScreen(
+                tabStore = tabStore,
                 modifier = pad,
-                initialUrl = dest.url,
-                sandboxName = dest.sandbox,
                 onOpenNetwork = { destination = AppDestination.Network },
-                onOpenScripts = { destination = AppDestination.Scripts(dest.url) },
+                onOpenScripts = { destination = AppDestination.Scripts },
                 onBackToLauncher = { destination = AppDestination.Launcher },
             )
             AppDestination.Network -> NetworkHistoryScreen(
@@ -121,15 +132,27 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )
-            is AppDestination.Scripts -> UserScriptsScreen(
+            AppDestination.Recon -> ReconWorkbenchScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Browser(dest.returnUrl) },
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Scripts -> UserScriptsScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Browser },
+            )
+            is AppDestination.SandboxBrowser -> BrowserScreen(
+                modifier = pad,
+                initialUrl = dest.url,
+                sandboxName = dest.sandbox,
+                onOpenNetwork = { destination = AppDestination.Network },
+                onOpenScripts = { destination = AppDestination.Scripts },
+                onBackToLauncher = { destination = AppDestination.Launcher },
             )
             AppDestination.Sandboxes -> SandboxesScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
                 onOpenSandbox = { name ->
-                    destination = AppDestination.Browser(url = "https://example.com", sandbox = name)
+                    destination = AppDestination.SandboxBrowser(url = "https://example.com", sandbox = name)
                 },
             )
         }

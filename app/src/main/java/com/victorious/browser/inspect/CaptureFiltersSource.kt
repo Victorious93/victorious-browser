@@ -1,7 +1,9 @@
 package com.victorious.browser.inspect
 
+import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.http.FullHttpRequest
+import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpObject
 import io.netty.handler.codec.http.HttpRequest
 import io.netty.handler.codec.http.HttpResponse
@@ -14,25 +16,26 @@ import org.littleshoot.proxy.HttpFiltersSourceAdapter
  * local proxy into [CaptureStore], and (when [InterceptController] is enabled)
  * parks non-CONNECT requests for operator edit / forward / drop.
  *
- * Request aggregation is capped so [FullHttpRequest] bodies are available for
- * intercept edit and history replay without unbounded buffering.
+ * Request and response aggregation is capped by [CaptureConfig.maxBodyBytes] so
+ * bodies are available for intercept edit, history detail, and search without
+ * unbounded buffering.
  */
 class CaptureFiltersSource(
     private val blockerSettings: ContentBlockerSettings,
 ) : HttpFiltersSourceAdapter() {
 
     companion object {
-        /** Cap for aggregated request bodies (intercept + capture). */
-        const val MAX_REQUEST_BUFFER_BYTES = 256 * 1024
-        const val MAX_RESPONSE_BUFFER_BYTES = 256 * 1024
+        /** @deprecated Use [CaptureConfig.maxBodyBytes]; retained for callers. */
+        const val MAX_REQUEST_BUFFER_BYTES = CaptureConfig.DEFAULT_MAX_BODY_BYTES
+        const val MAX_RESPONSE_BUFFER_BYTES = CaptureConfig.DEFAULT_MAX_BODY_BYTES
 
         /** Synthetic status recorded for a blocked exchange; no real server was contacted. */
         const val BLOCKED_STATUS_CODE = -1
     }
 
-    override fun getMaximumRequestBufferSizeInBytes(): Int = MAX_REQUEST_BUFFER_BYTES
+    override fun getMaximumRequestBufferSizeInBytes(): Int = CaptureConfig.maxBodyBytes()
 
-    override fun getMaximumResponseBufferSizeInBytes(): Int = MAX_RESPONSE_BUFFER_BYTES
+    override fun getMaximumResponseBufferSizeInBytes(): Int = CaptureConfig.maxBodyBytes()
 
     override fun filterRequest(
         originalRequest: HttpRequest,
@@ -96,13 +99,20 @@ class CaptureFiltersSource(
                     val headers = httpObject.headers().entries().map {
                         CapturedHeader(it.key, it.value)
                     }
+                    val (body, truncated, wireBytes) = extractBody(httpObject)
                     CaptureStore.update(id) { ex ->
                         ex.statusCode = httpObject.status().code()
                         ex.responseHeaders = headers
                         ex.responseReceivedAt = System.currentTimeMillis()
-                        ex.responseBytes = headers.firstOrNull {
-                            it.name.equals("Content-Length", true)
-                        }?.value?.toLongOrNull() ?: ex.responseBytes
+                        if (body != null) {
+                            ex.responseBody = body
+                            ex.responseBodyTruncated = truncated
+                            ex.responseBytes = wireBytes
+                        } else {
+                            ex.responseBytes = headers.firstOrNull {
+                                it.name.equals("Content-Length", true)
+                            }?.value?.toLongOrNull() ?: ex.responseBytes
+                        }
                     }
                 }
                 return httpObject
@@ -125,6 +135,13 @@ class CaptureFiltersSource(
         val idx = list.indexOfFirst { it.id == id }
         if (idx < 0) return
         val old = list[idx]
+        val cap = CaptureConfig.maxBodyBytes()
+        val rawBody = edited.body?.copyOf()
+        val (body, truncated) = when {
+            rawBody == null -> null to false
+            rawBody.size > cap -> rawBody.copyOf(cap) to true
+            else -> rawBody to false
+        }
         val replacement = CapturedExchange(
             id = old.id,
             method = edited.method,
@@ -140,8 +157,10 @@ class CaptureFiltersSource(
             responseReceivedAt = old.responseReceivedAt,
             requestBytes = edited.body?.size?.toLong() ?: old.requestBytes,
             responseBytes = old.responseBytes,
-            requestBody = edited.body?.copyOf(),
+            requestBody = body,
             responseBody = old.responseBody,
+            requestBodyTruncated = truncated,
+            responseBodyTruncated = old.responseBodyTruncated,
         )
         val updated = list.toMutableList()
         updated[idx] = replacement
@@ -160,19 +179,8 @@ class CaptureFiltersSource(
             host.isNotEmpty() -> "$scheme://$host$uri"
             else -> uri
         }
-        val body: ByteArray? = if (req is FullHttpRequest) {
-            val buf = req.content()
-            if (buf != null && buf.readableBytes() > 0) {
-                val bytes = ByteArray(buf.readableBytes())
-                buf.getBytes(buf.readerIndex(), bytes)
-                bytes
-            } else {
-                null
-            }
-        } else {
-            null
-        }
-        val reqBytes = body?.size?.toLong()
+        val (body, truncated, wireBytes) = extractBody(req)
+        val reqBytes = wireBytes.takeIf { it > 0 }
             ?: headers.firstOrNull { it.name.equals("Content-Length", true) }?.value?.toLongOrNull()
             ?: 0
         return CapturedExchange(
@@ -185,6 +193,30 @@ class CaptureFiltersSource(
             requestStartedAt = System.currentTimeMillis(),
             requestBytes = reqBytes,
             requestBody = body,
+            requestBodyTruncated = truncated,
         )
+    }
+
+    /**
+     * Copy aggregated body bytes from a FullHttpRequest / FullHttpResponse,
+     * truncating to [CaptureConfig.maxBodyBytes] when needed.
+     *
+     * @return Triple(capturedBytesOrNull, truncated, wireByteCount)
+     */
+    private fun extractBody(msg: Any): Triple<ByteArray?, Boolean, Long> {
+        val buf: ByteBuf? = when (msg) {
+            is FullHttpRequest -> msg.content()
+            is FullHttpResponse -> msg.content()
+            else -> null
+        }
+        if (buf == null || buf.readableBytes() <= 0) {
+            return Triple(null, false, 0L)
+        }
+        val wire = buf.readableBytes()
+        val cap = CaptureConfig.maxBodyBytes()
+        val take = minOf(wire, cap)
+        val bytes = ByteArray(take)
+        buf.getBytes(buf.readerIndex(), bytes)
+        return Triple(bytes, wire > cap, wire.toLong())
     }
 }

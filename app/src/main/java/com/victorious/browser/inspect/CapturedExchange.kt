@@ -3,9 +3,9 @@ package com.victorious.browser.inspect
 /**
  * A single captured HTTP(S) exchange from the app's own in-app WebView.
  *
- * Modeled so request/response *bodies* can be added later without a schema change:
- * [requestBody]/[responseBody] are nullable placeholders that the current capture
- * path leaves null (only metadata + headers are captured in this layer).
+ * Request and response bodies are aggregated by the proxy up to
+ * [CaptureConfig.maxBodyBytes]; when the wire body is larger the captured
+ * bytes are truncated and the matching `*BodyTruncated` flag is set.
  */
 data class CapturedHeader(val name: String, val value: String)
 
@@ -23,9 +23,12 @@ data class CapturedExchange(
     var responseReceivedAt: Long? = null,
     var requestBytes: Long = 0,
     var responseBytes: Long = 0,
-    // Deferred: body capture depth. Reserved so bodies can be added later.
     var requestBody: ByteArray? = null,
     var responseBody: ByteArray? = null,
+    /** True when [requestBody] was cut to the capture size cap. */
+    var requestBodyTruncated: Boolean = false,
+    /** True when [responseBody] was cut to the capture size cap. */
+    var responseBodyTruncated: Boolean = false,
     // Set when ContentBlocker matched this host; the request never reached upstream.
     // Recorded here (rather than silently dropped) so the content blocker never hides
     // traffic from the inspection history it shares a code path with.
@@ -33,4 +36,13 @@ data class CapturedExchange(
 ) {
     val durationMs: Long?
         get() = responseReceivedAt?.let { it - requestStartedAt }
+
+    fun requestContentType(): String? = contentTypeOf(requestHeaders)
+
+    fun responseContentType(): String? = contentTypeOf(responseHeaders)
+
+    companion object {
+        fun contentTypeOf(headers: List<CapturedHeader>): String? =
+            headers.firstOrNull { it.name.equals("Content-Type", ignoreCase = true) }?.value
+    }
 }

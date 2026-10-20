@@ -3,8 +3,7 @@ package com.victorious.browser.panels
 /**
  * A fleet panel entry — one of the owner's own locally-hosted / fleet web dashboards.
  *
- * TODO(control-bridge): future ops `browser.panel.list` / `browser.panel.open` will
- * read and drive [PanelStore]. Do NOT build the Messenger bridge in this layer.
+ * Fleet bridge ops `browser.panel.list` / `browser.panel.open` read/drive [PanelStore].
  */
 enum class PanelKind {
     LOCAL_HTTP,
@@ -26,12 +25,12 @@ data class Panel(
     val url: String,
     val kind: PanelKind,
     /**
-     * When true, this panel is expected to be reachable over the Victorious Mesh
-     * (routing provided by the separate Victorious Mesh app). This flag is
-     * informational for now — mesh resolution is deferred.
-     *
-     * TODO(mesh-reachability): later resolve mesh reachability via the mesh app;
-     * do NOT implement VPN/mesh networking here.
+     * When true, opening this panel goes through [MeshReachability] /
+     * [MeshResolution]: host is classified (mesh IP / MagicDNS / node name),
+     * a best-effort tunnel signal + TCP probe runs, and the UI either opens
+     * the WebView or shows an actionable tunnel-down / unreachable / unknown-host
+     * message. Mesh *routing* itself is provided by the separate Victorious Mesh
+     * app (this browser does not hold the VpnService slot).
      */
     val reachOverMesh: Boolean = false,
 )

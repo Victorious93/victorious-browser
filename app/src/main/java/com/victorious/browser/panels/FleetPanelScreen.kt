@@ -28,6 +28,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -56,6 +57,9 @@ import java.util.UUID
  * Fleet Panels home screen — lists the owner's own locally-hosted / fleet web
  * dashboards and opens them in the in-app WebView.
  *
+ * Mesh-flagged panels go through [MeshReachability] before open: tunnel-up +
+ * reachable → WebView; tunnel-down / unreachable / unknown-host → actionable dialog.
+ *
  * Fleet bridge ops `browser.panel.list` / `browser.panel.open` read/drive [PanelStore].
  */
 @Composable
@@ -64,6 +68,7 @@ fun FleetPanelScreen(
     onOpenNetwork: () -> Unit,
     onOpenBrowser: () -> Unit,
     onOpenFleetControl: () -> Unit = {},
+    onOpenRecon: () -> Unit = {},
     onOpenSandboxes: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -75,13 +80,49 @@ fun FleetPanelScreen(
     var editing by remember { mutableStateOf<Panel?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<Panel?>(null) }
+    var meshChecking by remember { mutableStateOf(false) }
+    var meshBlock by remember { mutableStateOf<MeshOpenDecision.Blocked?>(null) }
+    var meshBlockedPanel by remember { mutableStateOf<Panel?>(null) }
+    val meshAppInstalled = remember { MeshReachability.isMeshAppInstalled(context) }
+
+    val appContext = context.applicationContext
+
+    // Row status: direct panels → plain TCP; mesh panels → MeshReachability probe.
+    suspend fun probeRow(p: Panel): Reachability =
+        if (p.reachOverMesh) {
+            if (MeshReachability.probeFor(p.url, appContext).tcpReachable) Reachability.UP else Reachability.DOWN
+        } else {
+            ReachabilityChecker.check(p.url)
+        }
 
     // Lightweight async reachability probe on load / panel-set change.
+    // Direct panels: plain TCP. Mesh panels: MeshReachability probe → UP/DOWN.
     LaunchedEffect(panels) {
         panels.forEach { p ->
             if (reachability[p.id] == null) reachability[p.id] = Reachability.UNKNOWN
             scope.launch {
-                reachability[p.id] = ReachabilityChecker.check(p.url)
+                reachability[p.id] = probeRow(p)
+            }
+        }
+    }
+
+    fun openPanel(panel: Panel) {
+        if (!panel.reachOverMesh) {
+            onOpenPanel(panel)
+            return
+        }
+        meshChecking = true
+        scope.launch {
+            val decision = MeshReachability.resolveAndDecide(panel, appContext)
+            meshChecking = false
+            reachability[panel.id] =
+                if (decision is MeshOpenDecision.Open) Reachability.UP else Reachability.DOWN
+            when (decision) {
+                is MeshOpenDecision.Open -> onOpenPanel(panel)
+                is MeshOpenDecision.Blocked -> {
+                    meshBlockedPanel = panel
+                    meshBlock = decision
+                }
             }
         }
     }
@@ -105,6 +146,9 @@ fun FleetPanelScreen(
                 TextButton(onClick = onOpenFleetControl) {
                     Text("Control", color = NeonMagenta)
                 }
+                TextButton(onClick = onOpenRecon) {
+                    Text("Recon", color = NeonCyan)
+                }
                 TextButton(onClick = onOpenSandboxes) {
                     Text("Sandboxes", color = NeonMagenta)
                 }
@@ -118,11 +162,20 @@ fun FleetPanelScreen(
         }
 
         Text(
-            "Owner dashboards — editable defaults. Mesh routing is provided by the " +
-                "separate Victorious Mesh app; this launcher only stores a per-panel flag.",
+            "Owner dashboards. Mesh panels resolve over Victorious Mesh " +
+                "(tunnel provided by that app — this browser does not hold VpnService).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (!meshAppInstalled) {
+            Text(
+                "Victorious Mesh app not detected on this device " +
+                    "(looked for ${MeshReachability.MESH_PACKAGE_CANDIDATES.joinToString()}). " +
+                    "Mesh panels will still probe; install Mesh for live routing.",
+                style = MaterialTheme.typography.labelSmall,
+                color = NeonMagenta,
+            )
+        }
 
         Spacer(Modifier.height(8.dp))
 
@@ -133,7 +186,7 @@ fun FleetPanelScreen(
                     panels.forEach { p ->
                         reachability[p.id] = Reachability.UNKNOWN
                         scope.launch {
-                            reachability[p.id] = ReachabilityChecker.check(p.url)
+                            reachability[p.id] = probeRow(p)
                         }
                     }
                 },
@@ -153,7 +206,7 @@ fun FleetPanelScreen(
                 PanelCard(
                     panel = panel,
                     reachability = reachability[panel.id] ?: Reachability.UNKNOWN,
-                    onOpen = { onOpenPanel(panel) },
+                    onOpen = { openPanel(panel) },
                     onEdit = { editing = panel },
                     onDelete = { deleting = panel },
                     onPin = {
@@ -165,6 +218,71 @@ fun FleetPanelScreen(
                 )
             }
         }
+    }
+
+    if (meshChecking) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Checking mesh…") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Resolving mesh target and probing reachability.")
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
+    meshBlock?.let { blocked ->
+        AlertDialog(
+            onDismissRequest = { meshBlock = null },
+            title = {
+                Text(
+                    when (blocked.reason) {
+                        MeshBlockReason.TUNNEL_DOWN -> "Mesh tunnel down"
+                        MeshBlockReason.UNREACHABLE -> "Mesh node unreachable"
+                        MeshBlockReason.UNKNOWN_HOST -> "Unknown mesh host"
+                        MeshBlockReason.NOT_MESH_PANEL -> "Not a mesh panel"
+                    },
+                )
+            },
+            text = { Text(blocked.message) },
+            confirmButton = {
+                Row {
+                    if (blocked.reason == MeshBlockReason.TUNNEL_DOWN) {
+                        // Standard Android launcher intent for an installed candidate
+                        // package — NOT a Victorious Mesh API (none is published yet).
+                        val launch = remember(blocked) { MeshReachability.meshAppLaunchIntent(context) }
+                        if (launch != null) {
+                            TextButton(
+                                onClick = {
+                                    runCatching { context.startActivity(launch) }
+                                },
+                            ) { Text("Open Victorious Mesh", color = NeonCyan) }
+                        }
+                    }
+                    val retryPanel = meshBlockedPanel
+                    if (retryPanel != null && blocked.reason != MeshBlockReason.NOT_MESH_PANEL) {
+                        TextButton(
+                            onClick = {
+                                meshBlock = null
+                                openPanel(retryPanel)
+                            },
+                        ) { Text("Retry", color = NeonCyan) }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        meshBlock = null
+                        meshBlockedPanel = null
+                    },
+                ) { Text("Dismiss", color = NeonMagenta) }
+            },
+        )
     }
 
     if (adding) {
@@ -251,7 +369,7 @@ private fun PanelCard(
             )
             if (panel.reachOverMesh) {
                 Text(
-                    "via mesh (Victorious Mesh app)",
+                    "via mesh (Victorious Mesh)",
                     style = MaterialTheme.typography.labelSmall,
                     color = NeonMagenta,
                 )
@@ -321,7 +439,6 @@ private fun PanelEditDialog(
     var url by remember { mutableStateOf(initial.url) }
     var kind by remember { mutableStateOf(initial.kind) }
     var mesh by remember { mutableStateOf(initial.reachOverMesh) }
-    var kindExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -339,7 +456,7 @@ private fun PanelEditDialog(
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("URL") },
+                    label = { Text("URL (mesh IP, MagicDNS, or node name)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -360,8 +477,8 @@ private fun PanelEditDialog(
                     Column {
                         Text("Reach over mesh")
                         Text(
-                            "Mesh routing comes from the Victorious Mesh app — " +
-                                "this flag is informational until mesh-reachability is wired.",
+                            "Opens via mesh resolution. Routing comes from the " +
+                                "Victorious Mesh app; this browser only probes reachability.",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

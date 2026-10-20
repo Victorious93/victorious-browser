@@ -17,6 +17,15 @@ for the developer's own traffic.
   (landed on `feature/fleet-bridge`)
 - **Proxy modify-and-replay** — Burp-lite intercept / edit / replay
   (landed on `feature/proxy-modify-replay`)
+- **Deep capture** — full req/resp bodies, cookies+attrs, JWT decode,
+  searchable history (landed on `feature/deep-capture`)
+- **Mesh reachability** — resolve & probe mesh-flagged fleet panels over
+  Victorious Mesh before opening (landed on `feature/mesh-reachability`)
+- **Multi-tab browsing + quick fleet-panel switching** — multiple WebView
+  tabs (tab bar: new / close / switch, title + favicon-or-host) with each tab's
+  live WebView instance preserved across switches, plus a bottom-sheet palette to
+  jump to any configured fleet panel in the current or a new tab; mesh-flagged
+  panels still pass the mesh-reachability check (landed on `feature/multi-tab`)
 
 ## Fleet control bridge
 
@@ -77,15 +86,52 @@ own locally-hosted / fleet web dashboards and opens them in the in-app WebView.
 - Seeded once with editable DEFAULT panels (placeholder `127.0.0.1` URLs/ports —
   the owner configures real addresses; no credentials or private IPs invented):
   KYC-AuditLab, Headscale admin, Metasploit web console, Local HTTP tool template
-- **Mesh awareness (lightweight):** per-panel `reachOverMesh` flag + UI note that
-  mesh routing is provided by the separate Victorious Mesh app. No VPN/mesh
-  networking is implemented here — `TODO(mesh-reachability)` marks where that
-  will later resolve
-- `TODO(control-bridge)` marks where future ops `browser.panel.list` /
-  `browser.panel.open` will read/drive the store — Messenger bridge is **not**
-  built in this layer
+- **Mesh reachability:** per-panel `reachOverMesh` flag; opening a mesh panel
+  goes through host classification + tunnel-signal / TCP probe (see
+  [Mesh reachability](#mesh-reachability) below). No VpnService in this app.
+- Fleet bridge ops `browser.panel.list` / `browser.panel.open` already read/drive
+  the store via the Messenger bridge (landed on `feature/fleet-bridge`)
 - WebView opens when a panel is tapped; **Panels** returns to the launcher;
   Network / free Browser remain reachable from the chrome
+
+
+## Mesh reachability
+
+For fleet panels with **Reach over mesh** enabled, opening goes through a
+best-effort resolution layer (`MeshResolution` + `MeshReachability`) instead of
+jumping straight into the WebView:
+
+1. **Classify** the panel URL host: loopback / direct / Tailscale CGNAT
+   `100.64.0.0/10` / mesh IPv6 `fd7a:115c:a1e0::/48` / MagicDNS suffix
+   (`.ts.net`, `.tailnet`, `.mesh.victorious`) / bare node name.
+2. **Probe tunnel signals** (best-effort — no published Victorious Mesh API is
+   used or invented): local `NetworkInterface` name prefixes
+   (`tun`, `tailscale`, `wg`, …) and presence of a CGNAT / mesh IPv6 address;
+   optional soft signal via `NetworkCapabilities.TRANSPORT_VPN`; package-presence
+   hint for candidate Victorious Mesh package ids.
+3. **Resolve** name-based hosts (`InetAddress` lookup), then **TCP connect** to
+   host:port (same idea as the direct reachability checker).
+4. **Decide**:
+   - TCP connect succeeds → open in WebView
+   - tunnel signals present, name resolves / IP literal, TCP fail → "mesh node unreachable"
+   - tunnel signals present but name does not resolve → "unknown mesh host"
+   - no tunnel signals + (name fails or TCP fails) → actionable **"Victorious Mesh
+     tunnel appears down — bring it up in the Victorious Mesh app"**
+   - unparseable host → "unknown mesh host"
+5. The blocked dialog offers **Retry** and, when a candidate Victorious Mesh
+   package is installed, **Open Victorious Mesh** (standard launcher intent only).
+
+This browser does **not** hold the Android `VpnService` slot (reserved for
+Victorious Mesh). Routing is provided by that app when its tunnel is up; this
+layer only resolves names/addresses and reports clear UX states.
+
+**Honest contract status:** no ContentProvider / Intent / Broadcast contract from
+Victorious Mesh was confirmed at implementation time. Interface-name heuristics
+are labelled `[Guessing]` in code; CGNAT/MagicDNS conventions `[Likely]`; TCP
+probe + host classification `[Certain]`. Follow-up: coordinate with the
+Victorious Mesh agent for a published status contract.
+
+No new third-party dependencies.
 
 ## Lite Apps
 
@@ -240,25 +286,34 @@ use on the owner's own devices.
 
 ### Capture + helpers
 
-- History of method, URL, host, status, timestamps, byte sizes, headers
+- History of method, URL, host, status, timestamps, byte sizes, headers, and
+  **request + response bodies** (aggregated by LittleProxy, capped by
+  `CaptureConfig`, default 256 KiB, clampable 4 KiB–2 MiB)
+- Bodies tagged with Content-Type; text shown as UTF-8, binary as a hex preview;
+  truncation flagged when wire size exceeds the cap
 - Persisted in an in-memory `CaptureStore` (`StateFlow`, capped) — a simple local
-  store; Room can replace it later without a model change. Request bodies are
-  captured when aggregated by the proxy (capped); response bodies fill on
-  direct replay
-- Helpers: surface cookies, detect `Authorization: Bearer`, decode JWT header /
-  payload (base64 only — **no** signature checking)
-- Export captured entries to a JSON file under the app's external files
-  (`CaptureExporter`) for handoff to other first-party analysis tools
+  store; Room was **not** introduced (history is session-scoped inspection data)
+- Cookies: `Cookie` / `Set-Cookie` broken out into name / value / attributes
+  (`Path`, `Domain`, `Secure`, `HttpOnly`, `SameSite`, …)
+- JWT: detect bearer / JWT-looking tokens in `Authorization`, cookie values, and
+  textual bodies; decode header + payload (base64url) and surface claims.
+  **Signatures are never verified** — UI and export label results
+  `decoded-not-verified`
+- Searchable / filterable history (`HistoryFilter`): free-text search across URL,
+  headers, body text, cookies, and decoded JWT claims; filters for method,
+  status, content-type, host
+- Export captured entries (incl. body base64 + cookies + JWTs) to JSON under the
+  app's external files (`CaptureExporter`) for handoff to other first-party tools
 
 ### UI
 
 Compose **Network / History** screen (reachable from the browser chrome):
 
-- On/off switch for the inspection proxy
-- List + detail view (headers, cookies, decoded JWT)
-- Clear + Export JSON actions
-- `TODO(control-bridge)` marks where a later control-bridge will toggle the proxy;
-  that bridge is **not** built in this layer
+- On/off switch for the inspection proxy + intercept toggle
+- Search bar + optional filters (method / status / host / content-type)
+- List + deep detail view (bodies with content-type, cookies with attributes,
+  decoded-not-verified JWTs)
+- Clear + Export JSON + Modify / Replay actions
 
 ### Modify-and-replay (Burp-lite)
 
@@ -277,7 +332,7 @@ deadlock the UI).
 ### Deferred
 
 - Control-bridge ops for intercept/replay
-- Deeper response-body capture UI
+- UI control to change `CaptureConfig` body-size cap at runtime
 
 ## Build
 
