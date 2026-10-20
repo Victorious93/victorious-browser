@@ -73,6 +73,7 @@ class BridgeCodecTest {
         assertEquals("not_found", BridgeErrorCategory.NOT_FOUND.wire)
         assertEquals("proxy_error", BridgeErrorCategory.PROXY_ERROR.wire)
         assertEquals("internal", BridgeErrorCategory.INTERNAL.wire)
+        assertEquals("requires_confirm", BridgeErrorCategory.REQUIRES_CONFIRM.wire)
     }
 
     @Test

@@ -157,26 +157,60 @@ owner's own devices (EXTERNAL_NODE class).
 ### Protocol
 - Intent action: `com.victorious.browser.action.BRIDGE`
 - `Message.what` = `1` request / `2` response
-- Wire: newline-delimited JSON, `BRIDGE_PROTOCOL_MAJOR = 1`
-- Envelope: `BridgeRequest { id, op, params }` →
+- Wire: newline-delimited JSON, `BRIDGE_PROTOCOL_MAJOR = 1`, `MINOR = 1`
+- **Legacy envelope** (still accepted): `BridgeRequest { id, op, params }` →
   `BridgeResponse { id, ok, result?, error? }` with `error = { category, message }`
+- **Frozen remote-control envelope v1**: flat top-level fields
+  `{ op, requestId, targetNodeRef?, actionRef?, params, nonce (128-bit hex),
+  timestampMs, ttlMs (default 120000, max 300000), destructive, trigger,
+  …macro/config fields }` → same response shape (`id` = `requestId`)
 
 ### Security model
 1. **Caller identity** via `Message.sendingUid` (not `Binder.getCallingUid()`):
    resolve packages for that uid and verify signing-cert SHA-256 against the
    pinned DEBUG + RELEASE fleet-provided controller cert SHA-256 for package
    `ai.droidcommand.app` only (no `ai.droidcommand.app.debug` pin — dropped by the fleet).
-   RELEASE pin verifies the CALLER; it is not this app's own signing key
-2. **External control** persisted switch — **OFF by default**; when off every
-   op is rejected with `not_paired`
-3. Envelope / parameter validity
+   RELEASE pin verifies the CALLER; it is not this app's own signing key.
+   Source of truth: `ControllerAllowlist.DEBUG_CERT_SHA256` /
+   `RELEASE_CERT_SHA256` (unchanged; v1 ops reuse the same gate).
+2. **External control** persisted switch — **OFF by default**. Ops with
+   `remoteAllowed:false` (remote.command, macro.*, config.*) and all legacy
+   ops are rejected with `not_paired` when off. Reads
+   `capabilities.get` / `node.status.get` may proceed when off.
+3. **Replay/expiry (v1)**: reject when `now > timestampMs+ttlMs`; reject reused
+   nonces (in-memory nonce cache). ttl clamped to max 300000 ms.
+4. Envelope / parameter validity → `invalid_parameters` on any invalid field.
 
-Check order on each request: identity → external-control switch → envelope.
+Check order: identity → envelope → ttl/nonce (v1) → external-control
+(remoteAllowed=false) → dispatch.
 
-### Operations
+### Frozen v1 operations (capabilities.get advertisement)
+
+| op | kind | remoteAllowed | requiresConfirm |
+|---|---|---|---|
+| `capabilities.get` | read | true | false |
+| `remote.command` | action | false | false |
+| `macro.step` | action | false | false |
+| `macro.run` | action | false | false |
+| `node.status.get` | read | true | false |
+| `config.export` | action | false | false |
+| `config.import` | action | false | true |
+
+- **remote.command / macro.*** — `actionRef` targets existing `browser.*` ops
+  (capabilities.get, open_url, panel.list/open, recon.summary, proxy.set/status).
+  `macro.run` supports `dryRun` (validate only) and `onError: abort|continue`.
+- **node.status.get** — `NodeStatusSnapshot` with domains at least `browser` and
+  `node_health`. Detail ≤200 chars; no URLs/cookies/personal data.
+- **config.export** — ONE preferences-only entry for `com.victorious.browser`.
+  Never cookies, passwords, proxy credentials, or certs (`invalid_parameters`).
+- **config.import** — `dryRun` + `conflictPolicy skip|overwrite|merge-by-id`
+  (default skip); requires on-device confirmation (Fleet control screen);
+  **never** auto-enables external control via import.
+
+### Legacy browser.* operations
 | op | params | result |
 |---|---|---|
-| `browser.capabilities.get` | `{}` | `{ protocol_major, package, node_id, operations, proxy_supported }` |
+| `browser.capabilities.get` | `{}` | `{ protocol_major, protocol_minor, package, node_id, operations, v1_operations, proxy_supported }` |
 | `browser.open_url` | `{ url }` | `{ status:"opened" }` |
 | `browser.panel.list` | `{}` | `{ panels:[{id,name,url,kind}] }` |
 | `browser.panel.open` | `{ panel_id }` | `{ status:"opened" }` |
@@ -184,14 +218,16 @@ Check order on each request: identity → external-control switch → envelope.
 | `browser.proxy.set` | `{ enabled:bool }` | fire-and-forget ack |
 | `browser.proxy.status` | `{}` | `{ running, port, ca_installed }` |
 
-Parameterless ops must receive exactly `{}` — non-empty params → `invalid_parameters`.
+Parameterless legacy ops must receive exactly `{}` — non-empty params → `invalid_parameters`.
 
-Error categories: `invalid_parameters`, `not_paired`, `not_found`, `proxy_error`, `internal`.
+Error categories: `invalid_parameters`, `not_paired`, `not_found`, `proxy_error`,
+`internal`, `requires_confirm`.
 
 Node-id: generated/persisted on first run, matches `^browser-[0-9a-f]{32}$`.
 
 In-app **Fleet control** settings screen (from the launcher **Control** button):
-external-control switch, read-only node-id, pinned controller info.
+external-control switch, pending `config.import` approve/reject, read-only
+node-id, pinned controller info. See `docs/MANUAL.md` for the v1 envelope.
 
 ## Fleet-panel launcher
 

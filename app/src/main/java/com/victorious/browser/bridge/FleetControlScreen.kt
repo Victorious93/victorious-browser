@@ -28,7 +28,7 @@ import com.victorious.browser.ui.theme.NeonMagenta
 
 /**
  * In-app "Fleet control" settings: external-control on/off (OFF by default),
- * read-only node-id, and pinned controller info.
+ * read-only node-id, pinned controller info, and config.import confirmation.
  */
 @Composable
 fun FleetControlScreen(
@@ -38,6 +38,7 @@ fun FleetControlScreen(
     val context = LocalContext.current
     val settings = remember { BridgeSettings.get(context) }
     val enabled by settings.externalControlEnabled.collectAsState()
+    val pendingImport by ConfigImportGate.pending.collectAsState()
 
     Column(
         modifier = modifier
@@ -71,8 +72,11 @@ fun FleetControlScreen(
             Column(Modifier.weight(1f)) {
                 Text("External control", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    if (enabled) "ON — allowlisted controller may drive this node"
-                    else "OFF — all bridge ops rejected with not_paired",
+                    if (enabled) {
+                        "ON — allowlisted controller may drive remote.command / macro.* / config.*"
+                    } else {
+                        "OFF — remoteAllowed=false ops rejected; capabilities.get + node.status.get still allowed"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -80,6 +84,40 @@ fun FleetControlScreen(
             Switch(
                 checked = enabled,
                 onCheckedChange = { settings.setExternalControlEnabled(it) },
+            )
+        }
+
+        pendingImport?.let { pending ->
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+            Text("Pending config.import", style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
+            Text(
+                "requestId=${pending.requestId}",
+                fontFamily = FontFamily.Monospace,
+                style = MaterialTheme.typography.labelSmall,
+            )
+            Text(
+                "policy=${pending.conflictPolicy.wire} · ${pending.payloadSummary}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                "Import never auto-enables external control.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row {
+                TextButton(onClick = { ConfigImportGate.approve(pending.requestId) }) {
+                    Text("Approve import", color = NeonCyan)
+                }
+                TextButton(onClick = { ConfigImportGate.reject(pending.requestId) }) {
+                    Text("Reject")
+                }
+            }
+            Text(
+                "After Approve, the controller must resend the same requestId.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -109,11 +147,19 @@ fun FleetControlScreen(
         Spacer(Modifier.height(16.dp))
         Text("Protocol", style = MaterialTheme.typography.titleSmall, color = NeonCyan)
         Text("BRIDGE_PROTOCOL_MAJOR = ${BridgeProtocol.BRIDGE_PROTOCOL_MAJOR}")
+        Text("BRIDGE_PROTOCOL_MINOR = ${BridgeProtocol.BRIDGE_PROTOCOL_MINOR}")
         Text("Action: ${BridgeProtocol.ACTION}")
         Text("Message.what request=${BridgeProtocol.MSG_WHAT_REQUEST} response=${BridgeProtocol.MSG_WHAT_RESPONSE}")
         Text(
-            "Check order: sendingUid identity → external-control switch → envelope",
+            "Check order: sendingUid identity → envelope → ttl/nonce (v1) → " +
+                "external-control (remoteAllowed=false) → dispatch",
             style = MaterialTheme.typography.bodySmall,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "v1 ops: " + BridgeV1.ALL_OPS.joinToString(),
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
         )
     }
 }
