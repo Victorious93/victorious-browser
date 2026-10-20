@@ -14,6 +14,8 @@ import com.victorious.browser.inspect.ContentBlockerSettings
 import com.victorious.browser.inspect.LocalProxyService
 import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.userscript.UserScriptStore
+import com.victorious.browser.netid.NetIdSettings
+import com.victorious.browser.netid.SpoofInjector
 
 /**
  * Keeps http/https navigation inside the WebView (no external browser kick-out)
@@ -86,8 +88,10 @@ class VictoriousWebViewClient(
         if (!url.isNullOrBlank()) onUrlChanged(url)
 
         val host = url?.toUri()?.host
-        val store = UserScriptStore.get(view.context.applicationContext)
+        val appCtx = view.context.applicationContext
+        val store = UserScriptStore.get(appCtx)
         UserScriptInjector.injectFallbackOnPageStarted(view, host, store.scripts.value)
+        SpoofInjector.injectFallbackOnPageStarted(view, NetIdSettings.get(appCtx))
     }
 
     override fun onPageFinished(view: WebView, url: String?) {

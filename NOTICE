@@ -24,7 +24,8 @@ https://github.com/LittleProxy/LittleProxy
 https://www.apache.org/licenses/LICENSE-2.0
 
 Used as the on-device localhost HTTP(S) inspection proxy core. Bound to
-127.0.0.1 only; does NOT use Android VpnService.
+127.0.0.1 only; does NOT use Android VpnService. Also used (same library)
+for optional upstream proxy chaining via ChainedProxyManager (HTTP / SOCKS5).
 
 -----------------------------------------------------------------------------
 Bouncy Castle (org.bouncycastle:bcpkix-jdk18on, org.bouncycastle:bcprov-jdk18on)

@@ -8,6 +8,8 @@ import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.victorious.browser.netid.NetIdSettings
+import com.victorious.browser.netid.UpstreamChain
 import org.littleshoot.proxy.HttpProxyServer
 import org.littleshoot.proxy.TransportProtocol
 import org.littleshoot.proxy.impl.DefaultHttpProxyServer
@@ -56,6 +58,8 @@ object LocalProxyService {
             // Root is pre-baked in assets/inspect_ca.p12; public half is in
             // res/raw/inspect_root.pem and trusted only by this app via
             // network_security_config (no system-wide install).
+            // Apply any persisted upstream chain before bootstrap (off by default).
+            UpstreamChain.set(NetIdSettings.get(context).upstream.value)
             val authority = LocalCertificateAuthority.load(context, CA_PASSWORD)
             val mitm = LocalMitmManager(authority)
             val listen = InetSocketAddress("127.0.0.1", preferredPort)
@@ -68,6 +72,7 @@ object LocalProxyService {
                 .withTransportProtocol(TransportProtocol.TCP)
                 .withManInTheMiddle(mitm)
                 .withFiltersSource(CaptureFiltersSource(ContentBlockerSettings.get(context.applicationContext)))
+                .withChainProxyManager(UpstreamChain.manager())
                 .withTransparent(false)
                 .start()
 
