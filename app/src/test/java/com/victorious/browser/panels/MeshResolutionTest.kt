@@ -40,12 +40,24 @@ class MeshResolutionTest {
     }
 
     @Test
-    fun classify_magic_dns() {
-        assertEquals(HostKind.MAGIC_DNS, MeshResolution.classifyHost("node-alpha.ts.net"))
-        assertEquals(HostKind.MAGIC_DNS, MeshResolution.classifyHost("hs.tailnet"))
-        assertEquals(HostKind.MAGIC_DNS, MeshResolution.classifyHost("admin.mesh.victorious"))
-        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("example.com"))
-        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("headscale.example.org"))
+    fun classify_magic_dns_unset_base_domain_skips_suffix_matching() {
+        val unset = MeshSettings(baseDomain = null)
+        // fleet.example is NOT the Victorious Mesh suffix.
+        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("node-alpha.ts.net", unset))
+        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("admin.mesh.victorious", unset))
+        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("example.com", unset))
+        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("node-alpha.ts.net", MeshSettings(baseDomain = "  ")))
+    }
+
+    @Test
+    fun classify_magic_dns_with_base_domain() {
+        val s = MeshSettings(baseDomain = ".Fleet.Example.")
+        assertEquals(HostKind.MAGIC_DNS, MeshResolution.classifyHost("node-alpha.fleet.example", s))
+        assertEquals(HostKind.MAGIC_DNS, MeshResolution.classifyHost("a.b.fleet.example.", s))
+        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("node-alpha.ts.net", s))
+        assertEquals(HostKind.DIRECT, MeshResolution.classifyHost("evilfleet.example", s))
+        assertTrue(MeshResolution.matchesBaseDomain("x.fleet.example", "fleet.example"))
+        assertFalse(MeshResolution.matchesBaseDomain("x.fleet.example", null))
     }
 
     @Test
@@ -76,8 +88,8 @@ class MeshResolutionTest {
         assertEquals("100.64.0.5", h1)
         assertEquals(8080, p1)
 
-        val (h2, p2) = MeshResolution.parseTarget("https://node-alpha.ts.net/x")
-        assertEquals("node-alpha.ts.net", h2)
+        val (h2, p2) = MeshResolution.parseTarget("https://node-alpha.fleet.example/x")
+        assertEquals("node-alpha.fleet.example", h2)
         assertEquals(443, p2)
 
         val (h3, p3) = MeshResolution.parseTarget("node-alpha")
@@ -133,9 +145,9 @@ class MeshResolutionTest {
     @Test
     fun decide_tunnel_down_when_no_signals_and_tcp_fail() {
         val d = MeshResolution.decide(
-            "http://node-alpha.ts.net/",
+            "http://node-alpha.fleet.example/",
             reachOverMesh = true,
-            snapshot = snap(HostKind.MAGIC_DNS, host = "node-alpha.ts.net", tcp = false),
+            snapshot = snap(HostKind.MAGIC_DNS, host = "node-alpha.fleet.example", tcp = false),
         )
         assertTrue(d is MeshOpenDecision.Blocked)
         val b = d as MeshOpenDecision.Blocked
@@ -205,9 +217,9 @@ class MeshResolutionTest {
     @Test
     fun decide_unknown_host_when_name_fails_but_tunnel_up() {
         val d = MeshResolution.decide(
-            "http://no-such-node.ts.net/",
+            "http://no-such-node.fleet.example/",
             reachOverMesh = true,
-            snapshot = snap(HostKind.MAGIC_DNS, host = "no-such-node.ts.net", dns = false, addr = true),
+            snapshot = snap(HostKind.MAGIC_DNS, host = "no-such-node.fleet.example", dns = false, addr = true),
         )
         val b = d as MeshOpenDecision.Blocked
         assertEquals(MeshBlockReason.UNKNOWN_HOST, b.reason)
@@ -229,9 +241,9 @@ class MeshResolutionTest {
     @Test
     fun decide_tunnel_down_resolves_but_no_route() {
         val d = MeshResolution.decide(
-            "http://node-alpha.ts.net/",
+            "http://node-alpha.fleet.example/",
             reachOverMesh = true,
-            snapshot = snap(HostKind.MAGIC_DNS, host = "node-alpha.ts.net", dns = true),
+            snapshot = snap(HostKind.MAGIC_DNS, host = "node-alpha.fleet.example", dns = true),
         )
         val b = d as MeshOpenDecision.Blocked
         assertEquals(MeshBlockReason.TUNNEL_DOWN, b.reason)
@@ -280,3 +292,4 @@ class MeshResolutionTest {
         assertEquals(HostKind.UNKNOWN, MeshResolution.classifyHost(bad))
     }
 }
+

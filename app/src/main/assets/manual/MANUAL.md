@@ -275,6 +275,16 @@ it; mesh panels run a reachability check first and show an actionable dialog
 (Retry / Open Victorious Mesh) if the tunnel is down. Tap **Pin** to pin a panel as
 a chrome-less Lite App.
 
+**Mesh settings.** Tap **Mesh settings** on the Fleet Panels screen to edit:
+mesh IP ranges (CIDR, defaults `100.64.0.0/10` and `fd7a:115c:a1e0::/48`), your
+Headscale `base_domain` for MagicDNS names (blank = unset; `*.ts.net` is not
+used), and **Use Victorious Mesh bridge** (off by default). The mesh app is
+`com.victorious.mesh`. The status line shows the bridge state, e.g.
+"mesh bridge: not authorized yet — using passive detection" until Victorious Mesh
+adds this browser to its allowlist; mesh panels keep working via passive VPN
+detection either way. The bridge is read-only (`mesh.status`, `mesh.ip`) and your
+mesh IP is never logged, saved, or included in config exports.
+
 **Safety.** Reachability probing only — routing is provided by the Victorious Mesh
 app when its tunnel is up. No credentials or private IPs are seeded; defaults use
 placeholder `127.0.0.1` addresses.

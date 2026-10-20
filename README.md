@@ -282,39 +282,53 @@ own locally-hosted / fleet web dashboards and opens them in the in-app WebView.
 
 For fleet panels with **Reach over mesh** enabled, opening goes through a
 best-effort resolution layer (`MeshResolution` + `MeshReachability`) instead of
-jumping straight into the WebView:
+a plain TCP check:
 
-1. **Classify** the panel URL host: loopback / direct / Tailscale CGNAT
-   `100.64.0.0/10` / mesh IPv6 `fd7a:115c:a1e0::/48` / MagicDNS suffix
-   (`.ts.net`, `.tailnet`, `.mesh.victorious`) / bare node name.
-2. **Probe tunnel signals** (best-effort — no published Victorious Mesh API is
-   used or invented): local `NetworkInterface` name prefixes
-   (`tun`, `tailscale`, `wg`, …) and presence of a CGNAT / mesh IPv6 address;
-   optional soft signal via `NetworkCapabilities.TRANSPORT_VPN`; package-presence
-   hint for candidate Victorious Mesh package ids.
-3. **Resolve** name-based hosts (`InetAddress` lookup), then **TCP connect** to
-   host:port (same idea as the direct reachability checker).
-4. **Decide**:
-   - TCP connect succeeds → open in WebView
-   - tunnel signals present, name resolves / IP literal, TCP fail → "mesh node unreachable"
-   - tunnel signals present but name does not resolve → "unknown mesh host"
-   - no tunnel signals + (name fails or TCP fails) → actionable **"Victorious Mesh
-     tunnel appears down — bring it up in the Victorious Mesh app"**
-   - unparseable host → "unknown mesh host"
-5. The blocked dialog offers **Retry** and, when a candidate Victorious Mesh
-   package is installed, **Open Victorious Mesh** (standard launcher intent only).
+1. **Classify the host** (pure, unit-tested): loopback / mesh IP inside the
+   configured ranges / MagicDNS name under the configured Headscale
+   `base_domain` / bare node name / direct.
+2. **Detect the tunnel** (strongest first): Victorious Mesh bridge
+   `mesh.status` (if enabled and authorized) → `ConnectivityManager`
+   `TRANSPORT_VPN` network correlated with `com.victorious.mesh` (owner UID on
+   API 29+ when visible, or a VPN link address in the mesh ranges) → local
+   address in the mesh ranges → any VPN transport → interface-name prefixes
+   (weak fallback only; `tunN` naming is unreliable).
+3. **Resolve the name**, then **TCP-probe** host:port.
+4. **Decide**: open on success; otherwise "mesh node unreachable", "unknown mesh
+   host", or an actionable **"Victorious Mesh tunnel appears down"** dialog with
+   **Retry** / **Open Victorious Mesh**.
 
-This browser does **not** hold the Android `VpnService` slot (reserved for
-Victorious Mesh). Routing is provided by that app when its tunnel is up; this
-layer only resolves names/addresses and reports clear UX states.
+### Mesh config (Fleet Panels → **Mesh settings**)
 
-**Honest contract status:** no ContentProvider / Intent / Broadcast contract from
-Victorious Mesh was confirmed at implementation time. Interface-name heuristics
-are labelled `[Guessing]` in code; CGNAT/MagicDNS conventions `[Likely]`; TCP
-probe + host classification `[Certain]`. Follow-up: coordinate with the
-Victorious Mesh agent for a published status contract.
+| Setting | Default | Notes |
+|---|---|---|
+| Mesh package | `com.victorious.mesh` | Confirmed, debug + release, not editable |
+| Mesh IP ranges | `100.64.0.0/10`, `fd7a:115c:a1e0::/48` | Editable CIDR list (IPv4/IPv6) — override for a custom Headscale prefix |
+| Headscale `base_domain` | unset | MagicDNS suffix. **Not** `*.ts.net`. When unset, suffix matching is skipped |
+| Use Victorious Mesh bridge | off | Read-only, best-effort |
 
-No new third-party dependencies.
+Stored in SharedPreferences `mesh_config`. Mesh IPs are never stored.
+
+### Mesh bridge client
+
+`MeshBridgeClient` binds to Victorious Mesh's Messenger service
+(`com.victorious.mesh.action.BRIDGE`, spec: `docs/FLEET_BRIDGE.md` in
+`Victorious93/victorious-mesh`) and sends **only** read ops `mesh.status` and
+`mesh.ip` (wire `mesh.ip.get`) — legacy request until the node id is learned,
+then the frozen v1.1 envelope (`remote.command`, nonce, TTL clamped to ≤300 s).
+No `node.status.get` (the droidcommand-AI controller is the sole status-tray
+aggregator), no `mesh.up`/`mesh.down`, no control ops.
+
+Victorious Browser is **not yet on Mesh's package+cert allowlist**, so the bridge
+currently answers `unauthorized`. The client degrades gracefully: the UI shows
+"mesh bridge: not authorized yet — using passive detection" (or
+unavailable / not installed / external control off) and reachability falls back
+to passive `NetworkCapabilities` inference. No crash on denial, absence, or timeout.
+
+`mesh.ip` is **sensitive**: never logged, never persisted, and any `mesh_ip`-like
+key is stripped from `config.export` (and refused if requested).
+
+This browser does not hold the VpnService slot.
 
 ## Lite Apps
 

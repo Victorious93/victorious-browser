@@ -5,52 +5,119 @@ import java.net.URI
 /**
  * Pure (Android-free, unit-testable) mesh resolution + decision logic.
  *
- * ASSUMPTIONS (labelled honestly — no Victorious Mesh API is used or invented):
- *  - Victorious Mesh is Headscale/Tailscale-style, so node addresses are assumed to
- *    live in the Tailscale CGNAT range 100.64.0.0/10 (IPv4) or fd7a:115c:a1e0::/48
- *    (IPv6 ULA). If Victorious Mesh uses a different prefix, update [isMeshIpv4]/[isMeshIpv6].
- *  - MagicDNS-style names are assumed to end in `.ts.net` or a configurable tailnet
- *    base domain (see [MeshConfig.magicDnsSuffixes]); bare single-label names
- *    (e.g. `node-alpha`) are treated as mesh node names when the panel is flagged
- *    `reachOverMesh`.
- *  - There is NO confirmed Victorious Mesh content-provider / intent / Broadcast
- *    contract published for this browser. Tunnel-up detection is therefore a
- *    best-effort probe of known interface name prefixes + CGNAT address presence.
- *    Coordinate with the Victorious Mesh agent for a real published contract.
- *    Labels: [Certain] for host classification math; [Likely] for CGNAT/MagicDNS
- *    conventions; [Guessing] for interface-name heuristics.
+ * CONFIRMED by the Victorious Mesh agent (see docs/MANUAL.md "Mesh"):
+ *  [Certain] Mesh package is `com.victorious.mesh` (debug + release, no suffix).
+ *  [Certain] Default address ranges are Tailscale/Headscale 100.64.0.0/10 and
+ *            fd7a:115c:a1e0::/48 — but they are owner-EDITABLE ([MeshSettings]).
+ *  [Certain] MagicDNS suffix is NOT *.ts.net; it is the owner's Headscale
+ *            `base_domain` (unknown → configurable, default unset; when unset
+ *            MagicDNS-suffix matching is skipped).
+ *  [Guessing] Interface-name prefixes are only a weak fallback signal.
  */
+data class MeshSettings(
+    /** CIDR strings (IPv4 or IPv6), editable by the owner. */
+    val ranges: List<String> = MeshConfig.DEFAULT_RANGES,
+    /** Headscale `base_domain` (e.g. "mesh.example"). Null/blank = unset. */
+    val baseDomain: String? = null,
+    /** Best-effort use of the Victorious Mesh bridge client (read-only). */
+    val bridgeEnabled: Boolean = false,
+) {
+    /** Parsed, valid CIDRs; invalid entries are dropped (see [MeshRanges.parseAll]). */
+    val parsedRanges: List<Cidr> by lazy { MeshRanges.parseAll(ranges).valid }
+
+    /** Normalised base domain without leading/trailing dots, or null when unset. */
+    val normalizedBaseDomain: String? by lazy { MeshConfig.normalizeBaseDomain(baseDomain) }
+}
+
 object MeshConfig {
-    /** [Likely] Tailscale/Headscale CGNAT IPv4. */
-    const val CGNAT_PREFIX_BITS = 10
-    const val CGNAT_NETWORK = 0x64400000 // 100.64.0.0
+    /** [Certain] Confirmed Victorious Mesh applicationId (debug and release). */
+    const val MESH_PACKAGE = "com.victorious.mesh"
 
-    /** [Likely] Tailscale IPv6 ULA prefix. */
-    val IPV6_MESH_PREFIX = listOf(0xfd7a, 0x115c, 0xa1e0)
+    const val DEFAULT_IPV4_RANGE = "100.64.0.0/10"
+    const val DEFAULT_IPV6_RANGE = "fd7a:115c:a1e0::/48"
+    val DEFAULT_RANGES: List<String> = listOf(DEFAULT_IPV4_RANGE, DEFAULT_IPV6_RANGE)
 
-    /**
-     * [Likely] MagicDNS suffixes. Victorious Mesh may use a custom base domain —
-     * keep this list editable so the owner can add their Headscale base domain
-     * without a code change later (pass via PanelStore or prefs if needed).
-     */
-    val magicDnsSuffixes: List<String> = listOf(
-        ".ts.net",
-        ".tailnet",
-        ".mesh.victorious",
-    )
+    /** Live settings (loaded from [MeshConfigStore] at runtime; defaults in tests). */
+    @Volatile
+    var current: MeshSettings = MeshSettings()
 
     /**
-     * [Guessing] Interface name prefixes commonly used by Tailscale/Headscale
-     * userspace or kernel TUN on Android. Confirm with Victorious Mesh agent.
+     * [Guessing] WEAK fallback only: interface name prefixes. tun0/tunN naming is
+     * unreliable — primary detection is ConnectivityManager TRANSPORT_VPN +
+     * owner/package correlation (see MeshReachability).
      */
-    val meshIfacePrefixes: List<String> = listOf(
-        "tun",      // generic TUN (Android VpnService often uses tun0)
-        "tailscale",
-        "ts-",
-        "wg",        // wireguard (some Headscale clients)
-        "headscale",
-        "victorious",
-    )
+    val meshIfacePrefixes: List<String> = listOf("tun", "tailscale", "ts-", "wg", "headscale", "victorious")
+
+    fun normalizeBaseDomain(raw: String?): String? {
+        val t = raw?.trim()?.lowercase()?.trim('.') ?: return null
+        if (t.isEmpty() || t.contains(' ') || t.contains('/')) return null
+        return t
+    }
+}
+
+/** A parsed CIDR: [network] bytes (4 or 16) + [prefix] length. */
+data class Cidr(val network: List<Int>, val prefix: Int) {
+    val isV4: Boolean get() = network.size == 4
+
+    /** [addr] must be the same family byte list (0..255 each). */
+    fun contains(addr: List<Int>): Boolean {
+        if (addr.size != network.size) return false
+        var bits = prefix
+        for (i in addr.indices) {
+            if (bits <= 0) return true
+            val take = minOf(8, bits)
+            val mask = (0xff shl (8 - take)) and 0xff
+            if ((addr[i] and mask) != (network[i] and mask)) return false
+            bits -= take
+        }
+        return true
+    }
+}
+
+data class RangeParseResult(val valid: List<Cidr>, val invalid: List<String>)
+
+object MeshRanges {
+    /** Parse "a.b.c.d/n" or "v6::/n" (no DNS). Null if malformed. */
+    fun parse(raw: String): Cidr? {
+        val t = raw.trim()
+        val slash = t.indexOf('/')
+        if (slash <= 0) return null
+        val ip = t.substring(0, slash)
+        val prefix = t.substring(slash + 1).toIntOrNull() ?: return null
+        val bytes = addressBytes(ip) ?: return null
+        if (prefix < 0 || prefix > bytes.size * 8) return null
+        return Cidr(bytes, prefix)
+    }
+
+    /** Split on commas/newlines/whitespace; returns valid + rejected entries. */
+    fun parseAll(entries: List<String>): RangeParseResult {
+        val valid = mutableListOf<Cidr>()
+        val invalid = mutableListOf<String>()
+        entries.flatMap { splitText(it) }.forEach { e ->
+            val c = parse(e)
+            if (c != null) valid += c else invalid += e
+        }
+        return RangeParseResult(valid, invalid)
+    }
+
+    fun splitText(text: String): List<String> =
+        text.split(',', '\n', ' ', '\t', ';').map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** Address literal → byte list (IPv4 4 bytes, IPv6 16 bytes). No DNS. */
+    fun addressBytes(ip: String): List<Int>? {
+        val h = ip.trim().removePrefix("[").removeSuffix("]").substringBefore('%')
+        MeshResolution.parseIpv4(h)?.let { v ->
+            return listOf((v ushr 24) and 0xff, (v ushr 16) and 0xff, (v ushr 8) and 0xff, v and 0xff)
+        }
+        if (!h.contains(':')) return null
+        val hextets = MeshResolution.expandIpv6(h) ?: return null
+        return hextets.flatMap { listOf((it ushr 8) and 0xff, it and 0xff) }
+    }
+
+    fun matches(ip: String, ranges: List<Cidr>): Boolean {
+        val b = addressBytes(ip) ?: return false
+        return ranges.any { it.contains(b) }
+    }
 }
 
 /**
@@ -126,10 +193,22 @@ data class MeshProbeSnapshot(
      * ANY VPN (not just Victorious Mesh) sets this.
      */
     val vpnTransportActive: Boolean = false,
+    /**
+     * [Likely] A TRANSPORT_VPN network was correlated with Victorious Mesh
+     * (owner UID == com.victorious.mesh uid, or VPN link address in mesh ranges).
+     */
+    val meshVpnCorrelated: Boolean = false,
+    /**
+     * Authoritative answer from the Victorious Mesh bridge (`mesh.status.connected`)
+     * when the bridge is enabled AND authorized. `null` = bridge unavailable /
+     * not authorized → fall back to passive inference.
+     */
+    val bridgeConnected: Boolean? = null,
 ) {
-    /** Best-effort "some mesh-style tunnel seems up" — see labels on each field. */
+    /** Bridge answer when present, otherwise passive best-effort signals. */
     val tunnelLikelyUp: Boolean
-        get() = meshInterfacePresent || meshAddressPresent || vpnTransportActive
+        get() = bridgeConnected
+            ?: (meshVpnCorrelated || meshAddressPresent || vpnTransportActive || meshInterfacePresent)
 }
 
 object MeshResolution {
@@ -153,7 +232,7 @@ object MeshResolution {
     }
 
     /** Classify a host string. Pure — no network I/O. */
-    fun classifyHost(host: String?): HostKind {
+    fun classifyHost(host: String?, settings: MeshSettings = MeshConfig.current): HostKind {
         if (host.isNullOrBlank()) return HostKind.UNKNOWN
         val h = host.trim().lowercase().trimEnd('.')
 
@@ -164,17 +243,17 @@ object MeshResolution {
         // IPv4?
         val ipv4 = parseIpv4(h)
         if (ipv4 != null) {
-            return if (isMeshIpv4(ipv4)) HostKind.MESH_IPV4 else HostKind.DIRECT
+            return if (isMeshIpv4(ipv4, settings)) HostKind.MESH_IPV4 else HostKind.DIRECT
         }
 
         // IPv6? (URI may strip brackets already)
         val bare = h.removePrefix("[").removeSuffix("]")
         if (bare.contains(':')) {
-            return if (isMeshIpv6(bare)) HostKind.MESH_IPV6 else HostKind.DIRECT
+            return if (isMeshIpv6(bare, settings)) HostKind.MESH_IPV6 else HostKind.DIRECT
         }
 
-        // MagicDNS suffix?
-        if (MeshConfig.magicDnsSuffixes.any { h.endsWith(it) }) {
+        // MagicDNS suffix = owner's Headscale base_domain. Skipped when unset.
+        if (matchesBaseDomain(h, settings.normalizedBaseDomain)) {
             return HostKind.MAGIC_DNS
         }
 
@@ -272,18 +351,22 @@ object MeshResolution {
         else -> false
     }
 
-    fun isMeshIpv4(address: Int): Boolean {
-        val mask = (-1) shl (32 - MeshConfig.CGNAT_PREFIX_BITS)
-        return (address and mask) == MeshConfig.CGNAT_NETWORK
+    /** True when [host] equals or is a subdomain of [baseDomain]; false when unset. */
+    fun matchesBaseDomain(host: String?, baseDomain: String?): Boolean {
+        val b = MeshConfig.normalizeBaseDomain(baseDomain) ?: return false
+        val h = host?.trim()?.lowercase()?.trimEnd('.') ?: return false
+        return h.endsWith(".$b")
     }
 
-    fun isMeshIpv6(host: String): Boolean {
-        // Expand / compare first 3 hextets against fd7a:115c:a1e0
-        val parts = expandIpv6(host) ?: return false
-        if (parts.size < 3) return false
-        return parts[0] == MeshConfig.IPV6_MESH_PREFIX[0] &&
-            parts[1] == MeshConfig.IPV6_MESH_PREFIX[1] &&
-            parts[2] == MeshConfig.IPV6_MESH_PREFIX[2]
+    fun isMeshIpv4(address: Int, settings: MeshSettings = MeshConfig.current): Boolean {
+        val b = listOf((address ushr 24) and 0xff, (address ushr 16) and 0xff, (address ushr 8) and 0xff, address and 0xff)
+        return settings.parsedRanges.any { it.isV4 && it.contains(b) }
+    }
+
+    fun isMeshIpv6(host: String, settings: MeshSettings = MeshConfig.current): Boolean {
+        val b = MeshRanges.addressBytes(host) ?: return false
+        if (b.size != 16) return false
+        return settings.parsedRanges.any { !it.isV4 && it.contains(b) }
     }
 
     fun parseIpv4(host: String): Int? {

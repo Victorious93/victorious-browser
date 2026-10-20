@@ -17,41 +17,23 @@ import java.util.Collections
 /**
  * Android-side mesh reachability probe for fleet panels flagged [Panel.reachOverMesh].
  *
- * HONEST CONTRACT STATUS
- * ----------------------
- * No published Victorious Mesh content-provider, Broadcast, or Intent contract was
- * confirmed in this repo or via public docs at implementation time. Therefore:
- *
- *  [Certain]  TCP connect probe to host:port (same idea as [ReachabilityChecker]).
- *  [Certain]  Host classification via [MeshResolution.classifyHost].
- *  [Certain]  Separate name-resolution step (InetAddress lookup) so an unknown
- *             host is distinguished from "resolves but no route".
- *  [Likely]   Presence of a local address in Tailscale CGNAT 100.64.0.0/10 or
- *             fd7a:115c:a1e0::/48 means *some* mesh-style tunnel is up.
- *  [Guessing] Scanning [NetworkInterface] names for prefixes in
- *             [MeshConfig.meshIfacePrefixes] (tun/tailscale/wg/…). Android VpnService
- *             typically exposes tun0; Victorious Mesh may use a different name.
- *  [Guessing] Package-presence check for a configurable Victorious Mesh package
- *             name — useful UX hint only; not proof the tunnel is up.
- *
- * Follow-up: coordinate with the Victorious Mesh agent to publish a stable
- * ContentProvider / Intent contract (e.g. `content://com.victorious.mesh/status`
- * returning tunnelUp + node list). Until then this probe is best-effort.
+ * Signals, strongest first:
+ *  [Likely]   Victorious Mesh bridge `mesh.status.connected` (only when the bridge
+ *             toggle is on AND Mesh authorizes this browser; otherwise skipped).
+ *  [Likely]   ConnectivityManager TRANSPORT_VPN network correlated with
+ *             `com.victorious.mesh` (owner UID on API 29+ when visible, or a VPN
+ *             link address inside the configured mesh ranges).
+ *  [Likely]   Local address inside the configured mesh ranges.
+ *  [Likely]   Any TRANSPORT_VPN network (soft — any VPN trips it).
+ *  [Guessing] Interface-name prefixes (weak fallback; tunN naming is unreliable).
  *
  * This browser deliberately does NOT claim the VpnService slot.
  */
 object MeshReachability {
     private const val TCP_TIMEOUT_MS = 1_800
 
-    /**
-     * Known / candidate package ids for the Victorious Mesh app.
-     * [Guessing] — confirm with the Mesh agent and trim this list.
-     */
-    val MESH_PACKAGE_CANDIDATES: List<String> = listOf(
-        "com.victorious.mesh",
-        "com.victorious.meshvpn",
-        "com.victorious.vpn",
-    )
+    /** [Certain] Confirmed Victorious Mesh package (debug + release). */
+    const val MESH_PACKAGE: String = MeshConfig.MESH_PACKAGE
 
     /**
      * Full probe for a mesh panel: classify host, look for mesh iface/address
@@ -60,7 +42,8 @@ object MeshReachability {
      */
     suspend fun resolveAndDecide(panel: Panel, context: Context? = null): MeshOpenDecision =
         withContext(Dispatchers.IO) {
-            val snapshot = probeBlocking(panel.url, context)
+            val bridge = context?.let { bridgeConnected(it) }
+            val snapshot = probeBlocking(panel.url, context).copy(bridgeConnected = bridge)
             MeshResolution.decide(panel.url, panel.reachOverMesh, snapshot)
         }
 
@@ -68,24 +51,36 @@ object MeshReachability {
      * Probe only (no decide) — used by list-row recheck for mesh panels.
      */
     suspend fun probeFor(url: String, context: Context? = null): MeshProbeSnapshot =
-        withContext(Dispatchers.IO) { probeBlocking(url, context) }
+        withContext(Dispatchers.IO) {
+            val bridge = context?.let { bridgeConnected(it) }
+            probeBlocking(url, context).copy(bridgeConnected = bridge)
+        }
 
-    /** Launch intent for an installed Victorious Mesh candidate package, or null. */
-    fun meshAppLaunchIntent(context: Context): android.content.Intent? {
-        val pm = context.packageManager
-        return MESH_PACKAGE_CANDIDATES.firstNotNullOfOrNull { pkg -> pm.getLaunchIntentForPackage(pkg) }
+    /**
+     * `mesh.status.connected` from the bridge, or null when the toggle is off or
+     * the bridge is absent / not authorized / errors (graceful fallback).
+     */
+    suspend fun bridgeConnected(context: Context): Boolean? {
+        if (!MeshConfig.current.bridgeEnabled) return null
+        return when (val r = MeshBridgeClient(context).status()) {
+            is BridgeReply.Success -> MeshBridgeProtocol.parseStatus(r.result).connected
+            is BridgeReply.Failure -> null
+        }
     }
 
-    fun isMeshAppInstalled(context: Context): Boolean {
-        val pm = context.packageManager
-        return MESH_PACKAGE_CANDIDATES.any { pkg ->
-            try {
-                pm.getPackageInfo(pkg, 0)
-                true
-            } catch (_: PackageManager.NameNotFoundException) {
-                false
-            }
-        }
+    /** Launch intent for Victorious Mesh, or null. */
+    fun meshAppLaunchIntent(context: Context): android.content.Intent? =
+        try { context.packageManager.getLaunchIntentForPackage(MESH_PACKAGE) } catch (_: Exception) { null }
+
+    fun isMeshAppInstalled(context: Context): Boolean = meshUid(context) != null
+
+    /** UID of the installed Mesh package, or null. */
+    fun meshUid(context: Context): Int? = try {
+        context.packageManager.getApplicationInfo(MESH_PACKAGE, 0).uid
+    } catch (_: PackageManager.NameNotFoundException) {
+        null
+    } catch (_: Exception) {
+        null
     }
 
     /**
@@ -104,6 +99,7 @@ object MeshReachability {
         val iface = detectMeshInterface()
         val addr = detectMeshAddress()
         val vpn = context?.let { vpnTransportActive(it) } ?: false
+        val correlated = context?.let { meshVpnCorrelated(it) } ?: false
 
         // [Certain] Name resolution step, separate from TCP, so "unknown host"
         // can be told apart from "resolves but no route".
@@ -139,11 +135,12 @@ object MeshReachability {
             resolvedHost = host,
             dnsResolved = dns,
             vpnTransportActive = vpn,
+            meshVpnCorrelated = correlated,
         )
     }
 
     /**
-     * [Guessing] Walk [NetworkInterface] names for known prefixes.
+     * [Guessing] WEAK fallback: walk [NetworkInterface] names for known prefixes.
      */
     fun detectMeshInterface(): Boolean {
         return try {
@@ -161,7 +158,7 @@ object MeshReachability {
     }
 
     /**
-     * [Likely] Any local InetAddress in CGNAT / mesh IPv6 range.
+     * [Likely] Any local InetAddress inside the configured mesh ranges.
      */
     fun detectMeshAddress(): Boolean {
         return try {
@@ -212,6 +209,35 @@ object MeshReachability {
             cm.allNetworks.any { n ->
                 val caps = cm.getNetworkCapabilities(n) ?: return@any false
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * [Likely] A TRANSPORT_VPN network that belongs to Victorious Mesh:
+     * owner UID (API 29+, often hidden from non-owner apps → INVALID_UID) equals
+     * the `com.victorious.mesh` uid, OR the VPN's LinkProperties carry an
+     * address inside the configured mesh ranges.
+     */
+    fun meshVpnCorrelated(context: Context): Boolean {
+        return try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val meshUid = meshUid(context)
+            val ranges = MeshConfig.current.parsedRanges
+            @Suppress("DEPRECATION")
+            cm.allNetworks.any { n ->
+                val caps = cm.getNetworkCapabilities(n) ?: return@any false
+                if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@any false
+                if (meshUid != null && android.os.Build.VERSION.SDK_INT >= 29 &&
+                    caps.ownerUid == meshUid
+                ) return@any true
+                val lp = cm.getLinkProperties(n) ?: return@any false
+                lp.linkAddresses.any { la ->
+                    val host = la.address.hostAddress?.substringBefore('%') ?: return@any false
+                    MeshRanges.matches(host, ranges)
+                }
             }
         } catch (_: Exception) {
             false

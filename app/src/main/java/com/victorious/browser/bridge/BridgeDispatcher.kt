@@ -270,6 +270,7 @@ class BridgeDispatcher(private val context: Context) {
             "netid_spoof",
             "scanner_config",
             "evidence_store",
+            "mesh_config", // ranges/base_domain/toggle only; mesh IPs never stored + stripped
         )
         for (name in safeNames) {
             val prefs = context.applicationContext.getSharedPreferences(name, Context.MODE_PRIVATE)
