@@ -66,6 +66,7 @@ fun FleetPanelScreen(
     onOpenNetwork: () -> Unit,
     onOpenBrowser: () -> Unit,
     onOpenFleetControl: () -> Unit = {},
+    onOpenRecon: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -141,6 +142,9 @@ fun FleetPanelScreen(
             Row {
                 TextButton(onClick = onOpenFleetControl) {
                     Text("Control", color = NeonMagenta)
+                }
+                TextButton(onClick = onOpenRecon) {
+                    Text("Recon", color = NeonCyan)
                 }
                 TextButton(onClick = onOpenNetwork) {
                     Text("Network", color = NeonCyan)

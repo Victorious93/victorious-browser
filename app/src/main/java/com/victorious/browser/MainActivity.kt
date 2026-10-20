@@ -23,6 +23,7 @@ import com.victorious.browser.browser.TabStore
 import com.victorious.browser.browser.TabbedBrowserScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.panels.FleetPanelScreen
+import com.victorious.browser.recon.ReconWorkbenchScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 import kotlinx.coroutines.flow.collectLatest
 
@@ -61,6 +62,7 @@ private sealed class AppDestination {
     data object Browser : AppDestination()
     data object Network : AppDestination()
     data object FleetControl : AppDestination()
+    data object Recon : AppDestination()
 }
 
 @Composable
@@ -106,6 +108,7 @@ fun VictoriousBrowserApp(
                 onOpenNetwork = { destination = AppDestination.Network },
                 onOpenBrowser = { destination = AppDestination.Browser },
                 onOpenFleetControl = { destination = AppDestination.FleetControl },
+                onOpenRecon = { destination = AppDestination.Recon },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
@@ -118,6 +121,10 @@ fun VictoriousBrowserApp(
                 onBack = { destination = AppDestination.Launcher },
             )
             AppDestination.FleetControl -> FleetControlScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Recon -> ReconWorkbenchScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )
