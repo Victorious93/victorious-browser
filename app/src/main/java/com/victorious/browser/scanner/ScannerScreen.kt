@@ -53,6 +53,7 @@ import kotlin.random.Random
 @Composable
 fun ScannerScreen(
     onBack: () -> Unit,
+    onSendToFleet: (List<Finding>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -85,7 +86,7 @@ fun ScannerScreen(
         when (tab) {
             0 -> ScopeTab(config)
             1 -> SitemapTab(config)
-            2 -> ActiveScanTab(config)
+            2 -> ActiveScanTab(config, onSendToFleet)
             3 -> HeaderFuzzTab(config)
             4 -> SmugglingTab(config)
             5 -> OobTab(config)
@@ -283,7 +284,7 @@ private fun RenderNode(node: SitemapBuilder.SiteNode, depth: Int) {
 // --- Active scan tab -----------------------------------------------------------
 
 @Composable
-private fun ActiveScanTab(config: ScannerConfig) {
+private fun ActiveScanTab(config: ScannerConfig, onSendToFleet: (List<Finding>) -> Unit = {}) {
     val scope by config.scopeHosts.collectAsState()
     val collaborator by config.collaborator.collectAsState()
     var selected by remember { mutableStateOf<CapturedExchange?>(null) }
@@ -340,7 +341,14 @@ private fun ActiveScanTab(config: ScannerConfig) {
         Spacer(Modifier.height(8.dp))
         if (findings.isNotEmpty()) {
             SectionCard {
-                Text("Findings (${findings.size})", style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Findings (${findings.size})", style = MaterialTheme.typography.titleSmall, color = NeonMagenta)
+                    Button(onClick = { onSendToFleet(findings.toList()) }) { Text("Send to fleet") }
+                }
                 findings.forEach { f ->
                     Spacer(Modifier.height(6.dp))
                     Text(

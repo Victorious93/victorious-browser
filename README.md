@@ -51,6 +51,15 @@ for the developer's own traffic.
   cannot change the Wi-Fi MAC; the UI surfaces randomized-MAC status read-only and
   documents the limitation. (landed on `feature/proxy-spoof`)
 
+- **Fleet export + Metasploit RPC** — push captured endpoints / recon /
+  scanner findings to other fleet tools via a generic **fleet sink** (HTTP POST
+  of normalized JSON to a user-configured local/mesh endpoint, or share-sheet /
+  clipboard fallback), with a **Metasploit RPC console** (msgpack over HTTP
+  msgrpc: auth.login/logout, console.create/read/write/destroy, session list,
+  generic call). Exports strip cookies/passwords/proxy-creds/certs. Both are
+  **off by default** and user-configured; the receiving fleet-API contract is
+  **user-supplied, not bundled** (landed on `feature/fleet-export-msf`)
+
 - **Fuzz / Templates** — ffuf-style directory/endpoint brute-forcer (FUZZ-marker
   or append mode, wordlist + extensions, concurrency cap, status/size/word/line
   filters, live dedup'd results table with pause/stop), a Nuclei-**compatible-subset**
@@ -66,6 +75,56 @@ for the developer's own traffic.
   substitution, filter matching, dedup, YAML parsing, matcher evaluation,
   wordlist parsing) is unit-tested. (landed on `feature/fuzz-templates`)
 
+
+## Fleet export + Metasploit RPC
+
+### Export to fleet (`com.victorious.browser.export`)
+A generic **fleet sink** abstraction to hand captured endpoints, requests, and
+recon/scanner findings to other fleet tools (**HackerAI-Commander**,
+**Pentest-Swarm-AI**).
+
+- **Normalized payload** (`FleetExportPayload`): `source = com.victorious.browser`,
+  `schemaVersion`, `exportedAt`, `targets[]`, `endpoints[{method,url,params,headers?,
+  statusCode}]`, `findings[]`, and `counts`.
+- **Secret stripping** (`SecretStripper`): cookies, `Authorization` /
+  `Proxy-Authorization`, API keys, and any `password`/`token`/`secret`/`session`/
+  `cert`/`key`-like header or param are dropped before export. This mirrors the
+  capture-export secret rule — **no cookies, passwords, proxy creds, or certs ever
+  leave the device in an export.**
+- **Sinks**: (a) **HTTP sink** — POST the JSON to a user-configured local/mesh URL
+  with an optional bearer token; (b) **Intent/clipboard sink** — Android
+  share-sheet or clipboard copy fallback.
+- **UI**: "Send to fleet" actions on the Network/History and Scanner result
+  screens, plus an **Export** screen (sink config + dry-run JSON preview).
+- Config is `SharedPreferences` (`ExportSettings`), **empty by default**.
+
+> **CAVEAT — fleet API contract unknown.** The exact request path, headers, and
+> body shape expected by HackerAI-Commander and Pentest-Swarm-AI are **not
+> confirmed**. This app does **not** invent or bundle their endpoints: the target
+> URL + auth are fully user-configurable and default unset. Supply the endpoint
+> yourself and confirm the contract with those tools' owners. See the
+> `TODO(contract)` in `HttpFleetSink`.
+
+### Metasploit RPC console (`com.victorious.browser.msf`)
+Client for the Metasploit RPC API (**MessagePack over HTTP**, the `msgrpc`
+interface — POST to `/api/1.0/` with a msgpack `[method, token?, args...]` body;
+auth via `auth.login` returning a token).
+
+- Configurable host/port/ssl/user/pass (`MsfConfig`, `SharedPreferences`,
+  **off/empty by default**). The msgrpc service's default self-signed TLS cert is
+  accepted by a permissive trust manager scoped to this client only (owner's own
+  MSF host).
+- Implements `auth.login`/`auth.logout`, `console.create`/`read`/`write`/`destroy`,
+  `session.list`, and a generic `call(method, args)`.
+- Compose console UI: connect, interactive read/write, session list. Nothing
+  connects without user-entered creds + an explicit **Connect**.
+- **MessagePack is hand-rolled** (`MsgPack.kt`) — a minimal, first-party
+  encoder/decoder (nil/bool/int/float/str/bin/array/map), unit-tested. No msgpack
+  dependency was added.
+
+Pure logic in both features (payload normalization, secret-stripping, JSON
+serialization, msgpack encode/decode, MSF request/response mapping) is
+unit-tested.
 
 ## Fleet control bridge
 
