@@ -22,6 +22,7 @@ import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.browser.TabStore
 import com.victorious.browser.browser.TabbedBrowserScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
+import com.victorious.browser.help.HelpScreen
 import com.victorious.browser.home.HomeScreen
 import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.osint.OsintScreen
@@ -90,6 +91,7 @@ private sealed class AppDestination {
     data object Certs : AppDestination()
     data object Evidence : AppDestination()
     data object AntiPhish : AppDestination()
+    data object Help : AppDestination()
 }
 
 @Composable
@@ -147,6 +149,7 @@ fun VictoriousBrowserApp(
                 onOpenEvidence = { destination = AppDestination.Evidence },
                 onOpenAntiPhish = { destination = AppDestination.AntiPhish },
                 onOpenHome = { destination = AppDestination.Home },
+                onOpenHelp = { destination = AppDestination.Help },
             )
             AppDestination.Home -> HomeScreen(
                 modifier = pad,
@@ -217,6 +220,10 @@ fun VictoriousBrowserApp(
                 onBack = { destination = AppDestination.Launcher },
             )
             AppDestination.AntiPhish -> AntiPhishScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Help -> HelpScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )

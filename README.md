@@ -109,6 +109,20 @@ for the developer's own traffic.
   credential harvester, page-clone wizard, capture server, or browser-hooking tool.
   (landed on `feature/anti-phish`)
 
+- **In-app Help / Manual** — a searchable, sectioned on-device manual covering
+  every tool (Browser/tabs, intercepting proxy, Recon, OSINT + dork builder,
+  Scanner, Fuzz/templates/wordlists, Net ID / spoof, Fleet export, Metasploit
+  console, Certs, Evidence, Anti-Phish, Fleet bridge v1 / remote-control) with
+  what-it-does / how-to-use / safety notes, plus an About & Safety section
+  (authorized-use, scope-gating, off-by-default, external-control-off). Content is
+  sourced from `docs/MANUAL.md`, bundled verbatim as the asset
+  `assets/manual/MANUAL.md` and rendered by a tiny hand-rolled, dependency-free
+  Markdown renderer (`help/ManualParser.kt`, pure + unit-tested: headings, lists,
+  code/pipe-tables, paragraphs, keyword section search). Reached from the
+  **Help / Manual** launcher tile (`AppDestination.Help`), styled with the neon
+  design system (`ToolScaffold` + cyan→magenta `BrandRing`). No new dependencies.
+  (landed on `feature/in-app-help`)
+
 
 ## Fleet export + Metasploit RPC
 

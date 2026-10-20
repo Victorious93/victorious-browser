@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Place
@@ -97,6 +98,7 @@ fun FleetPanelScreen(
     onOpenEvidence: () -> Unit = {},
     onOpenAntiPhish: () -> Unit = {},
     onOpenHome: () -> Unit = {},
+    onOpenHelp: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -210,6 +212,12 @@ fun FleetPanelScreen(
                 Tool("Certs", "Inspection CA & certs", Icons.Filled.Lock, cyan, onOpenCerts),
                 Tool("Evidence", "Capture evidence log", Icons.Filled.DateRange, cyan, onOpenEvidence),
                 Tool("Anti-Phish", "Phishing awareness", Icons.Filled.CheckCircle, cyan, onOpenAntiPhish),
+            ),
+        ),
+        ToolGroup(
+            "Help",
+            listOf(
+                Tool("Help / Manual", "In-app manual & safety", Icons.Filled.Info, cyan, onOpenHelp),
             ),
         ),
     )
