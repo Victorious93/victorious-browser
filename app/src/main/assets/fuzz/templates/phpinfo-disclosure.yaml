@@ -1,0 +1,18 @@
+id: phpinfo-disclosure
+info:
+  name: phpinfo() information disclosure
+  severity: medium
+requests:
+  - method: GET
+    path: /phpinfo.php
+matchers:
+  - type: status
+    values:
+      - 200
+  - type: word
+    part: body
+    condition: and
+    values:
+      - "PHP Version"
+      - "phpinfo()"
+matchers-condition: and

@@ -1,0 +1,17 @@
+id: apache-server-status
+info:
+  name: Apache server-status exposed
+  severity: low
+requests:
+  - method: GET
+    path: /server-status
+matchers:
+  - type: status
+    values:
+      - 200
+  - type: word
+    part: body
+    condition: and
+    values:
+      - "Apache Server Status"
+matchers-condition: and

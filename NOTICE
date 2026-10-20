@@ -87,3 +87,34 @@ repository; the signatures were re-expressed independently and this notice
 credits the conceptual origin and their licenses.
 The OOB collaborator client is interactsh-compatible by configuration only; no
 interactsh (ProjectDiscovery, MIT) code is bundled or vendored.
+
+-----------------------------------------------------------------------------
+Fuzz / Templates module (app/src/main/java/com/victorious/browser/fuzz/)
+
+Curated starter wordlists — SecLists lineage
+The bundled starter wordlists under app/src/main/assets/fuzz/wordlists/
+(common-dirs.txt, common-files.txt, top-100-params.txt) are SMALL, hand-picked
+subsets whose entries draw on well-known, widely-published web-content and
+parameter name conventions as popularized by SecLists.
+  - SecLists (https://github.com/danielmiessler/SecLists)
+    License: MIT
+The full SecLists is NOT bundled or downloaded by this app (honoring the
+project's no-large-downloads rule); users import their own lists. This notice
+credits the conceptual lineage of the curated starters and SecLists' MIT license.
+No SecLists data files are copied verbatim into this repository.
+
+Nuclei-style template engine — compatible subset only (no Nuclei code)
+The template scanner is an independently-written, lightweight engine that
+understands only a small subset of the Nuclei template shape (id, info,
+requests[method/path/headers/body], matchers[status|word|regex|size]). It does
+NOT claim compatibility with real Nuclei templates beyond this subset and bundles
+no Nuclei (ProjectDiscovery) source or templates. The bundled example templates
+under app/src/main/assets/fuzz/templates/ are original, safe exposed-file /
+information-disclosure checks written for this project.
+  - Nuclei (https://github.com/projectdiscovery/nuclei) — MIT — referenced for
+    the template-shape concept only; no code or templates vendored.
+
+Minimal YAML parser
+app/src/main/java/com/victorious/browser/fuzz/MiniYaml.kt is a hand-rolled
+minimal indentation parser written for this project to avoid adding a YAML
+dependency. No third-party YAML library is bundled.

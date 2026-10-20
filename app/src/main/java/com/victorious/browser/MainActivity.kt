@@ -27,6 +27,7 @@ import com.victorious.browser.osint.OsintScreen
 import com.victorious.browser.recon.ReconWorkbenchScreen
 import com.victorious.browser.scanner.ScannerScreen
 import com.victorious.browser.netid.NetIdScreen
+import com.victorious.browser.fuzz.FuzzScreen
 import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
@@ -75,6 +76,7 @@ private sealed class AppDestination {
     data object Osint : AppDestination()
     data object Scanner : AppDestination()
     data object NetId : AppDestination()
+    data object Fuzz : AppDestination()
 }
 
 @Composable
@@ -125,6 +127,7 @@ fun VictoriousBrowserApp(
                 onOpenOsint = { destination = AppDestination.Osint },
                 onOpenScanner = { destination = AppDestination.Scanner },
                 onOpenNetId = { destination = AppDestination.NetId },
+                onOpenFuzz = { destination = AppDestination.Fuzz },
             )
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
@@ -156,6 +159,10 @@ fun VictoriousBrowserApp(
                 onBack = { destination = AppDestination.Launcher },
             )
             AppDestination.NetId -> NetIdScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Fuzz -> FuzzScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )
