@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="victorious-browser logo" width="200">
+</p>
+
 # Victorious Browser
 
 Fleet security / recon browser for the Victorious fleet.
