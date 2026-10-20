@@ -36,7 +36,7 @@ Chromium). Each tab keeps its own live WebView across switches.
 Use the tab bar to create, close and switch tabs, plus a bottom-sheet palette to
 jump to any configured fleet panel in the current or a new tab. Extras in the
 browser chrome: Desktop / Mobile UA toggle, a **Night** chip (algorithmic
-darkening), **Reader** mode (Readability.js, sanitized), **Scripts** (per-site
+darkening), **Reader** mode (Readability.js, sanitized), **Extensions** (userscript engine) / **Scripts** (per-site
 user JavaScript), **URL** tools (encode/decode, query view, link shortener, URL
 changer, URLhaus/VirusTotal scan with your own keys), and **Inject** (one-off JS
 or raw HTML into the current page).
@@ -288,6 +288,47 @@ mesh IP is never logged, saved, or included in config exports.
 **Safety.** Reachability probing only — routing is provided by the Victorious Mesh
 app when its tunnel is up. No credentials or private IPs are seeded; defaults use
 placeholder `127.0.0.1` addresses.
+
+
+## Extensions (Userscript Engine)
+
+Victorious ships a **WebView-native userscript engine**, not a Chrome/Firefox
+extension host. A system WebView has **no WebExtension API**, so `.crx` / `.xpi`
+packages cannot run here. What we do support is Greasemonkey / Tampermonkey-style
+**userscript logic** injected into pages.
+
+### What it can do
+- Parse `==UserScript==` metadata (`@name`, `@namespace`, `@version`,
+  `@description`, `@match` / `@include` / `@exclude`, `@run-at`, `@grant`,
+  `@require`, `@icon`).
+- Match pages with Chrome-style `@match` patterns and `@include`/`@exclude` globs
+  (or `/regex/` forms).
+- Inject matching scripts at `document-start` (via `onPageStarted`, best-effort —
+  not guaranteed before the page's own scripts), `document-end`, or
+  `document-idle` (via `onPageFinished`; idle is deferred with `setTimeout`).
+- Minimal GM shim: `GM_getValue` / `GM_setValue` / `GM_deleteValue` /
+  `GM_listValues` (backed by app storage through a scoped JS bridge),
+  `GM_addStyle`, `GM_log`, `GM_info`, `unsafeWindow` (= `window`).
+
+### What is stubbed / not supported
+- **No `.crx` / `.xpi` / real WebExtensions.**
+- `@require` is recorded but **never fetched** (no remote code loading).
+- `GM_xmlhttpRequest` is stubbed (logs + `onerror`) — no cross-origin XHR.
+- `GM_openInTab`, `GM_setClipboard`, `GM_registerMenuCommand`, `GM_notification`
+  are best-effort or no-ops.
+- There is **no userscript sandbox** beyond ordinary page JS; `unsafeWindow` is
+  just `window`.
+
+### Manager UI
+Open **Extensions** from the Fleet panel (Browse group) or the browser **Exts**
+button. Import by pasting a `.user.js` or picking a local file (≤ 2 MB).
+Enable / disable / delete; parsed metadata is shown. Three tiny self-authored
+starter scripts ship under `assets/userscripts/` (dark mode, storage viewer,
+show-all-links). Per-page: the **Exts on/off** chip pauses all extensions for
+the active tab's host without uninstalling them.
+
+The older **Scripts** button (host-pattern-only, no metadata block) remains for
+simple one-off snippets; prefer **Extensions** for real userscripts.
 
 ## UI / Navigation (Neon Design System)
 

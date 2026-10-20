@@ -9,6 +9,7 @@ for the developer's own traffic.
 ## Status
 
 - **Shell engine** — system WebView via `AndroidView` (landed)
+- **Userscript Extensions** — WebView-native Greasemonkey-style engine + manager UI (not .crx/.xpi); starters under `assets/userscripts/` (landed on `feature/webext-engine`)
 - **Proxy / MITM library** — LittleProxy (localhost socket proxy) + BouncyCastle
   local CA (landed on `feature/intercept-proxy`)
 - **Fleet-panel launcher** — home screen for the owner's own dashboards
@@ -362,19 +363,22 @@ works either way. A blocked request is still recorded in capture history, marked
 inspection tool it shares a code path with. The bundled host list (`ContentBlocker`)
 is a small illustrative sample, not a maintained blocklist.
 
-### User scripts
+### Userscript Extensions (WebView-native)
 
-Per-site JavaScript, managed from the **Scripts** button in the browser chrome
-(hidden in Lite App mode). Each script has a name, a host pattern (`example.com`
-or `*.example.com`, subdomain-inclusive either way), and a body. Injected via
-`WebViewCompat.addDocumentStartJavaScript` where the device's WebView supports it
-(`WebViewFeature.DOCUMENT_START_SCRIPT`) — scoped to origin-match rules built from
-the host pattern, so it runs before the page's own scripts. Falls back to
-`evaluateJavascript` in `onPageStarted` on older WebViews; that path runs after the
-page has already started, so a script relying on running first can be too late.
-Document-start scripts are installed once when the browser screen's WebView is
-created — a script added or edited while that screen stays open takes effect on
-the next time it's recreated, not immediately.
+**Not** Chrome/Firefox `.crx`/`.xpi` support — a system WebView has no WebExtension
+API. Victorious runs Greasemonkey/Tampermonkey-style **userscripts** injected into
+pages:
+
+- Metadata parser (`@name`, `@match`/`@include`/`@exclude`, `@run-at`, `@grant`, …)
+- Chrome-style match patterns + globs; inject at document-start/end/idle via the
+  existing WebView client hooks
+- Minimal GM shim (`GM_getValue`/`GM_setValue` via a scoped JS bridge, `GM_addStyle`,
+  `GM_log`, `unsafeWindow`); `@require` and `GM_xmlhttpRequest` are stubbed
+- **Extensions** manager UI (Fleet panel → Browse, or browser **Exts** button):
+  paste or load `.user.js` (≤ 2 MB), enable/disable/delete, per-host pause chip
+- Three self-authored starter scripts in `assets/userscripts/` (see NOTICE)
+
+The older host-pattern **Scripts** screen remains for simple snippets.
 
 ### Reader mode
 

@@ -40,6 +40,7 @@ import com.victorious.browser.sandbox.SandboxesScreen
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
 import com.victorious.browser.userscript.UserScriptsScreen
+import com.victorious.browser.webext.ExtensionsScreen
 import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
@@ -81,6 +82,7 @@ private sealed class AppDestination {
     data object FleetControl : AppDestination()
     data object Recon : AppDestination()
     data object Scripts : AppDestination()
+    data object Extensions : AppDestination()
     data object Sandboxes : AppDestination()
     data object Osint : AppDestination()
     data object Scanner : AppDestination()
@@ -150,6 +152,7 @@ fun VictoriousBrowserApp(
                 onOpenAntiPhish = { destination = AppDestination.AntiPhish },
                 onOpenHome = { destination = AppDestination.Home },
                 onOpenHelp = { destination = AppDestination.Help },
+                onOpenExtensions = { destination = AppDestination.Extensions },
             )
             AppDestination.Home -> HomeScreen(
                 modifier = pad,
@@ -165,6 +168,7 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 onOpenNetwork = { destination = AppDestination.Network },
                 onOpenScripts = { destination = AppDestination.Scripts },
+                onOpenExtensions = { destination = AppDestination.Extensions },
                 onBackToLauncher = { destination = AppDestination.Launcher },
                 onOpenAntiPhish = { destination = AppDestination.AntiPhish },
             )
@@ -224,6 +228,10 @@ fun VictoriousBrowserApp(
                 onBack = { destination = AppDestination.Launcher },
             )
             AppDestination.Help -> HelpScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Extensions -> ExtensionsScreen(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )

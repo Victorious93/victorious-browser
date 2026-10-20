@@ -73,6 +73,8 @@ import com.victorious.browser.reader.ReaderModeController
 import com.victorious.browser.urltools.UrlToolsDialog
 import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.userscript.UserScriptStore
+import com.victorious.browser.webext.ExtensionEngine
+import com.victorious.browser.webext.ExtensionStore
 import com.victorious.browser.netid.NetIdSettings
 import com.victorious.browser.netid.SpoofInjector
 import com.victorious.browser.panels.MeshBlockReason
@@ -113,6 +115,7 @@ fun TabbedBrowserScreen(
     modifier: Modifier = Modifier,
     onOpenNetwork: () -> Unit = {},
     onOpenScripts: () -> Unit = {},
+    onOpenExtensions: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
     onOpenAntiPhish: (() -> Unit)? = null,
 ) {
@@ -138,6 +141,8 @@ fun TabbedBrowserScreen(
     // tab's WebView), Reader (per-tab), URL tools + Inject (act on the active tab).
     val nightSettings = NightModeSettings.get(appContext)
     val nightMode by nightSettings.enabled.collectAsState()
+    val extStore = remember { ExtensionStore.get(appContext) }
+    val pausedHosts by extStore.pausedHosts.collectAsState()
     val readerTabs = remember { ReaderTabState() }
     var readerVersion by remember { mutableStateOf(0) }
     var showUrlTools by remember { mutableStateOf(false) }
@@ -181,6 +186,7 @@ fun TabbedBrowserScreen(
             // Document-start user scripts, per tab (same as BrowserScreen). The
             // onPageStarted fallback in VictoriousWebViewClient covers the rest.
             UserScriptInjector.installAll(this, UserScriptStore.get(appContext).scripts.value)
+            ExtensionEngine.attachBridgeIfNeeded(this)
             val netId = NetIdSettings.get(appContext)
             SpoofInjector.installDocumentStart(this, netId)
             SpoofInjector.applyUserAgent(this, netId.fingerprint.value)
@@ -431,6 +437,29 @@ fun TabbedBrowserScreen(
                 onClick = onOpenNetwork,
                 colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
             ) { Text("Network") }
+            val activeHost = run {
+                val u = activeId?.let { tabStore.get(it)?.url } ?: ""
+                runCatching { URI(u).host?.lowercase() }.getOrNull()
+            }
+            FilterChip(
+                selected = activeHost != null && activeHost in pausedHosts,
+                onClick = {
+                    val h = activeHost ?: return@FilterChip
+                    extStore.setHostPaused(h, h !in pausedHosts)
+                },
+                enabled = activeHost != null,
+                label = { Text(if (activeHost != null && activeHost in pausedHosts) "Exts off" else "Exts on") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = NeonMagenta.copy(alpha = 0.25f),
+                    selectedLabelColor = NeonMagenta,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+            Spacer(Modifier.width(4.dp))
+            TextButton(
+                onClick = onOpenExtensions,
+                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+            ) { Text("Exts") }
             TextButton(
                 onClick = onOpenScripts,
                 colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
