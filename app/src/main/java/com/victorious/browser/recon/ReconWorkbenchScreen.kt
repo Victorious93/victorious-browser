@@ -42,6 +42,7 @@ import com.victorious.browser.ui.theme.NeonMagenta
 @Composable
 fun ReconWorkbenchScreen(
     onBack: () -> Unit,
+    onOpenOsint: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var tab by remember { mutableStateOf(0) }
@@ -54,7 +55,10 @@ fun ReconWorkbenchScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text("Recon Workbench", style = MaterialTheme.typography.titleLarge, color = NeonMagenta)
-            TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
+            Row {
+                TextButton(onClick = onOpenOsint) { Text("OSINT", color = NeonMagenta) }
+                TextButton(onClick = onBack) { Text("Back", color = NeonCyan) }
+            }
         }
         Text(
             "Offline, pure-logic transforms for your own authorized targets. " +
