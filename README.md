@@ -1,8 +1,28 @@
+<!-- victorious-fleet-readme-refresh:start -->
 <p align="center">
-  <img src="assets/logo.png" alt="victorious-browser logo" width="200">
+  <img src="assets/logo.png" alt="Victorious Browser logo" width="200">
 </p>
 
 # Victorious Browser
+
+Fleet security / recon browser with web interception.
+
+**Package id:** `com.victorious.browser`
+
+**Status:** CI green *(from [fleet-manifest ROADMAP](https://github.com/Victorious93/fleet-manifest/blob/main/ROADMAP.md))*
+
+## Install / build
+
+Kotlin + Jetpack Compose (`app/build.gradle.kts`). Typical: `./gradlew :app:assembleDebug`.
+
+_Steps above are taken from this repo’s build files / existing docs; anything not exercised in this refresh is unlabeled as verified on a device._
+
+## Victorious fleet
+
+- Monorepo: [https://github.com/Victorious93/victorious-fleet](https://github.com/Victorious93/victorious-fleet)
+- Fleet site: [https://victorious-framework.pages.dev](https://victorious-framework.pages.dev)
+
+<!-- victorious-fleet-readme-refresh:end -->
 
 Fleet security / recon browser for the Victorious fleet.
 
