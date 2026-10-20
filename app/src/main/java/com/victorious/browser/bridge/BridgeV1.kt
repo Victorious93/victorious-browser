@@ -378,13 +378,24 @@ object ConfigBackup {
         "password", "cookie", "cookies", "proxy_password", "cert", "certs",
     )
 
+    /**
+     * SENSITIVE mesh-address keys (Victorious Mesh `mesh.ip`): never exported,
+     * matched case-insensitively by substring.
+     */
+    val SENSITIVE_KEY_FRAGMENTS: Set<String> = setOf("mesh_ip", "meship", "mesh.ip")
+
+    fun isSensitiveMeshKey(k: String): Boolean {
+        val l = k.lowercase()
+        return SENSITIVE_KEY_FRAGMENTS.any { l.contains(it) }
+    }
+
     /** Keys that must never be imported as enabling remote control. */
     const val EXTERNAL_CONTROL_KEY = "external_control_enabled"
 
     fun refuseIfSecretRequested(include: Collection<String>?): String? {
         if (include == null) return null
         for (name in include) {
-            if (name in SECRET_PREFS || name in SECRET_KEYS ||
+            if (name in SECRET_PREFS || name in SECRET_KEYS || isSensitiveMeshKey(name) ||
                 name.contains("cookie", ignoreCase = true) ||
                 name.contains("password", ignoreCase = true) ||
                 name.contains("cert", ignoreCase = true) ||
@@ -400,6 +411,7 @@ object ConfigBackup {
         if (prefsName in SECRET_PREFS) return null
         return entries.filterKeys { k ->
             k !in SECRET_KEYS &&
+                !isSensitiveMeshKey(k) &&
                 !k.contains("cookie", ignoreCase = true) &&
                 !k.contains("password", ignoreCase = true) &&
                 !k.contains("cert", ignoreCase = true)

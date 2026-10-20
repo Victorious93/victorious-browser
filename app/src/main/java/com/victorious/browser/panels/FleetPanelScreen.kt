@@ -113,6 +113,9 @@ fun FleetPanelScreen(
     var meshBlock by remember { mutableStateOf<MeshOpenDecision.Blocked?>(null) }
     var meshBlockedPanel by remember { mutableStateOf<Panel?>(null) }
     val meshAppInstalled = remember { MeshReachability.isMeshAppInstalled(context) }
+    var meshSettings by remember { mutableStateOf(MeshConfigStore.load(context)) }
+    var meshBridgeState by remember { mutableStateOf<MeshBridgeState>(MeshBridgeState.Off) }
+    var editingMeshSettings by remember { mutableStateOf(false) }
 
     val appContext = context.applicationContext
 
@@ -126,6 +129,17 @@ fun FleetPanelScreen(
 
     // Lightweight async reachability probe on load / panel-set change.
     // Direct panels: plain TCP. Mesh panels: MeshReachability probe → UP/DOWN.
+    // Best-effort bridge status (read-only mesh.status). Never throws.
+    LaunchedEffect(meshSettings) {
+        meshBridgeState = if (!meshSettings.bridgeEnabled) {
+            MeshBridgeState.Off
+        } else {
+            try { MeshBridgeClient(appContext).state() } catch (_: Exception) {
+                MeshBridgeState.Unavailable(BridgeErrorKind.UNAVAILABLE)
+            }
+        }
+    }
+
     LaunchedEffect(panels) {
         panels.forEach { p ->
             if (reachability[p.id] == null) reachability[p.id] = Reachability.UNKNOWN
@@ -288,15 +302,25 @@ fun FleetPanelScreen(
                 if (!meshAppInstalled) {
                     Text(
                         "Victorious Mesh app not detected on this device " +
-                            "(looked for ${MeshReachability.MESH_PACKAGE_CANDIDATES.joinToString()}). " +
+                            "(looked for ${MeshReachability.MESH_PACKAGE}). " +
                             "Mesh panels will still probe; install Mesh for live routing.",
                         style = MaterialTheme.typography.labelSmall,
                         color = NeonMagenta,
                     )
                 }
+                Text(
+                    meshBridgeState.label() +
+                        (meshSettings.normalizedBaseDomain?.let { " · base_domain $it" } ?: " · base_domain unset"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     com.victorious.browser.ui.components.NeonButton("Add panel", onClick = { adding = true })
+                    com.victorious.browser.ui.components.NeonOutlineButton(
+                        "Mesh settings",
+                        onClick = { editingMeshSettings = true },
+                    )
                     com.victorious.browser.ui.components.NeonOutlineButton(
                         "Recheck",
                         onClick = {
@@ -343,6 +367,18 @@ fun FleetPanelScreen(
                 },
             )
         }
+    }
+
+    if (editingMeshSettings) {
+        MeshSettingsDialog(
+            initial = meshSettings,
+            onDismiss = { editingMeshSettings = false },
+            onSave = { s ->
+                MeshConfigStore.save(context, s)
+                meshSettings = s
+                editingMeshSettings = false
+            },
+        )
     }
 
     if (meshChecking) {
@@ -629,5 +665,65 @@ private fun PanelEditDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
+    )
+}
+
+/** Owner-editable mesh config: ranges, Headscale base_domain, bridge toggle. */
+@Composable
+private fun MeshSettingsDialog(
+    initial: MeshSettings,
+    onDismiss: () -> Unit,
+    onSave: (MeshSettings) -> Unit,
+) {
+    var rangesText by remember { mutableStateOf(initial.ranges.joinToString("\n")) }
+    var baseDomain by remember { mutableStateOf(initial.baseDomain ?: "") }
+    var bridge by remember { mutableStateOf(initial.bridgeEnabled) }
+    val parsed = MeshRanges.parseAll(listOf(rangesText))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mesh settings") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Mesh app: ${MeshConfig.MESH_PACKAGE}",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                OutlinedTextField(
+                    value = rangesText,
+                    onValueChange = { rangesText = it },
+                    label = { Text("Mesh IP ranges (CIDR, one per line)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (parsed.invalid.isNotEmpty()) {
+                    Text("Ignored invalid: ${parsed.invalid.joinToString()}", color = NeonMagenta,
+                        style = MaterialTheme.typography.labelSmall)
+                }
+                TextButton(onClick = { rangesText = MeshConfig.DEFAULT_RANGES.joinToString("\n") }) {
+                    Text("Reset to Tailscale/Headscale defaults")
+                }
+                OutlinedTextField(
+                    value = baseDomain,
+                    onValueChange = { baseDomain = it },
+                    label = { Text("Headscale base_domain (MagicDNS; blank = unset)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = bridge, onCheckedChange = { bridge = it })
+                    Text(
+                        "Use Victorious Mesh bridge (read-only mesh.status / mesh.ip; best-effort, " +
+                            "falls back to passive detection if not authorized)",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val ranges = parsed.valid.let { if (it.isEmpty()) MeshConfig.DEFAULT_RANGES else MeshRanges.splitText(rangesText).filter { e -> MeshRanges.parse(e) != null } }
+                onSave(MeshSettings(ranges = ranges, baseDomain = MeshConfig.normalizeBaseDomain(baseDomain), bridgeEnabled = bridge))
+            }) { Text("Save", color = NeonCyan) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
