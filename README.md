@@ -26,6 +26,13 @@ for the developer's own traffic.
   live WebView instance preserved across switches, plus a bottom-sheet palette to
   jump to any configured fleet panel in the current or a new tab; mesh-flagged
   panels still pass the mesh-reachability check (landed on `feature/multi-tab`)
+- **Recon Workbench** — offline encode/decode, hasher/identifier, URL tools
+  (landed on `feature/recon-workbench`)
+- **Google Dork Builder + OSINT Panel** — compose dork queries from operators /
+  templates and open them in a WebView tab against Google/DuckDuckGo/Bing; pivot
+  links for public OSINT sources (crt.sh, DNS, reverse-IP, Wayback, Shodan,
+  Censys, WHOIS, VirusTotal, GitHub/Google dorks, username/email lookups); passive
+  tech fingerprint over already-captured responses (landed on `feature/osint-dork`)
 
 ## Fleet control bridge
 
