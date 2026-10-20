@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
@@ -99,6 +100,7 @@ fun FleetPanelScreen(
     onOpenAntiPhish: () -> Unit = {},
     onOpenHome: () -> Unit = {},
     onOpenHelp: () -> Unit = {},
+    onOpenExtensions: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -189,6 +191,7 @@ fun FleetPanelScreen(
             listOf(
                 Tool("Browser", "Tabbed browser shell", Icons.Filled.Home, cyan, onOpenBrowser),
                 Tool("Sandboxes", "Isolated browsing sandboxes", Icons.Filled.Build, cyan, onOpenSandboxes),
+                Tool("Extensions", "Userscript engine & manager", Icons.Filled.Star, cyan, onOpenExtensions),
             ),
         ),
         ToolGroup(

@@ -51,6 +51,7 @@ import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.netid.NetIdSettings
 import com.victorious.browser.netid.SpoofInjector
 import com.victorious.browser.userscript.UserScriptStore
+import com.victorious.browser.webext.ExtensionEngine
 import com.victorious.browser.antiphish.AntiPhishController
 import com.victorious.browser.antiphish.AntiPhishWarningBanner
 
@@ -339,6 +340,7 @@ fun BrowserScreen(
                     // UserScriptInjector's doc). Fallback path (onPageStarted) always
                     // reads the live store, so it stays current even without recreation.
                     UserScriptInjector.installAll(this, UserScriptStore.get(context).scripts.value)
+                    ExtensionEngine.attachBridgeIfNeeded(this)
                     val netId = NetIdSettings.get(context)
                     SpoofInjector.installDocumentStart(this, netId)
                     SpoofInjector.applyUserAgent(this, netId.fingerprint.value)

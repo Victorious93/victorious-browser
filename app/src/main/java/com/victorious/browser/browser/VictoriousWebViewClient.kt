@@ -14,6 +14,8 @@ import com.victorious.browser.inspect.ContentBlockerSettings
 import com.victorious.browser.inspect.LocalProxyService
 import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.userscript.UserScriptStore
+import com.victorious.browser.webext.ExtensionEngine
+import com.victorious.browser.webext.RunAt
 import com.victorious.browser.netid.NetIdSettings
 import com.victorious.browser.netid.SpoofInjector
 import com.victorious.browser.antiphish.AntiPhishController
@@ -93,6 +95,8 @@ class VictoriousWebViewClient(
         val store = UserScriptStore.get(appCtx)
         UserScriptInjector.injectFallbackOnPageStarted(view, host, store.scripts.value)
         SpoofInjector.injectFallbackOnPageStarted(view, NetIdSettings.get(appCtx))
+        // Userscript-style extensions: document-start best-effort (see ExtensionEngine).
+        ExtensionEngine.inject(view, url, RunAt.DOCUMENT_START)
     }
 
     override fun onPageFinished(view: WebView, url: String?) {
@@ -101,6 +105,8 @@ class VictoriousWebViewClient(
         if (!url.isNullOrBlank()) onUrlChanged(url)
         // Passive anti-phish scoring (no-op when detection is disabled).
         AntiPhishController.get(view.context).onPageFinished(view, url)
+        ExtensionEngine.inject(view, url, RunAt.DOCUMENT_END)
+        ExtensionEngine.inject(view, url, RunAt.DOCUMENT_IDLE)
     }
 
     override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {

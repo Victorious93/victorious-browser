@@ -160,3 +160,16 @@ small first-party confusable map (inspired by Unicode TR39 concepts; no TR39
 data tables vendored). Report JSON uses the already-bundled org.json.
 Exports to Downloads reuse MediaStoreDownloads (Android MediaStore framework).
 No credential capture, page cloning, or browser exploitation code is included.
+
+-----------------------------------------------------------------------------
+Bundled userscript starters (app/src/main/assets/userscripts/)
+Copyright (c) Victorious Fleet
+License: same as this project
+
+Self-authored example userscripts shipped with Victorious Browser:
+  - dark-mode.user.js
+  - storage-viewer.user.js
+  - show-links.user.js
+
+These are tiny demos for the WebView-native userscript engine. They are NOT
+third-party browser extensions and do NOT implement the WebExtension API.
