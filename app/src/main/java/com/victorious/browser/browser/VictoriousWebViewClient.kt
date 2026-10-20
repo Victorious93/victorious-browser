@@ -16,6 +16,7 @@ import com.victorious.browser.userscript.UserScriptInjector
 import com.victorious.browser.userscript.UserScriptStore
 import com.victorious.browser.netid.NetIdSettings
 import com.victorious.browser.netid.SpoofInjector
+import com.victorious.browser.antiphish.AntiPhishController
 
 /**
  * Keeps http/https navigation inside the WebView (no external browser kick-out)
@@ -98,6 +99,8 @@ class VictoriousWebViewClient(
         super.onPageFinished(view, url)
         onLoadingChanged(false)
         if (!url.isNullOrBlank()) onUrlChanged(url)
+        // Passive anti-phish scoring (no-op when detection is disabled).
+        AntiPhishController.get(view.context).onPageFinished(view, url)
     }
 
     override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {

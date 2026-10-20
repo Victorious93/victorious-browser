@@ -79,6 +79,8 @@ import com.victorious.browser.panels.Panel
 import com.victorious.browser.panels.PanelStore
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
+import com.victorious.browser.antiphish.AntiPhishController
+import com.victorious.browser.antiphish.AntiPhishWarningBanner
 import kotlinx.coroutines.launch
 import java.net.URI
 
@@ -109,6 +111,7 @@ fun TabbedBrowserScreen(
     onOpenNetwork: () -> Unit = {},
     onOpenScripts: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
+    onOpenAntiPhish: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val appContext = context.applicationContext
@@ -136,6 +139,10 @@ fun TabbedBrowserScreen(
     var readerVersion by remember { mutableStateOf(0) }
     var showUrlTools by remember { mutableStateOf(false) }
     var showInject by remember { mutableStateOf(false) }
+
+    val antiPhish = remember { AntiPhishController.get(appContext) }
+    val phishResult by antiPhish.lastResult.collectAsState()
+    val phishBanner by antiPhish.bannerVisible.collectAsState()
 
     val panelStore = remember { PanelStore.get(context) }
     val panels by panelStore.panels.collectAsState()
@@ -452,6 +459,21 @@ fun TabbedBrowserScreen(
             )
         } else {
             Spacer(Modifier.height(3.dp))
+        }
+
+
+        if (phishBanner) {
+            phishResult?.let { r ->
+                AntiPhishWarningBanner(
+                    result = r,
+                    onDismiss = { antiPhish.dismissCurrent() },
+                    onReport = {
+                        antiPhish.reportCurrent()
+                        Toast.makeText(appContext, "Reported to Anti-Phish log", Toast.LENGTH_SHORT).show()
+                    },
+                    onOpenModule = onOpenAntiPhish,
+                )
+            }
         }
 
         // WebView host: a single container; we attach the active tab's WebView and

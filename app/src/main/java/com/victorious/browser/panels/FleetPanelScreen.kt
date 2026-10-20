@@ -78,6 +78,7 @@ fun FleetPanelScreen(
     onOpenMsf: () -> Unit = {},
     onOpenCerts: () -> Unit = {},
     onOpenEvidence: () -> Unit = {},
+    onOpenAntiPhish: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -180,6 +181,9 @@ fun FleetPanelScreen(
                 }
                 TextButton(onClick = onOpenEvidence) {
                     Text("Evidence", color = NeonMagenta)
+                }
+                TextButton(onClick = onOpenAntiPhish) {
+                    Text("Anti-Phish", color = NeonCyan)
                 }
                 TextButton(onClick = onOpenExport) {
                     Text("Export", color = NeonCyan)
