@@ -1,6 +1,6 @@
 # Victorious Framework — Victorious Browser Living Guide
 
-Last updated: 2026-10-19 (fixed system-bar icon color for the always-dark theme). This guide is updated whenever project state changes.
+Last updated: 2026-10-23 (WireGuard + Headscale settings, rebased onto `main`'s subsequent batches). This guide is updated whenever project state changes.
 Last bridge update: 2026-10-20 — frozen remote-control envelope v1 (MINOR=1): capabilities.get, remote.command, macro.step/run, node.status.get, config.export/import. See docs/MANUAL.md.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
@@ -16,10 +16,11 @@ Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, 
 | Hermit-reference feature set (6 features) | Finished — merged to `main` |
 | URL tools + injection tools, URL changer | Finished — merged to `main` |
 | Virus/malware scan (corrected after live testing) | Finished — merged to `main` |
-| **System-bar icon fix for the always-dark theme** (this guide's current focus) | **In progress — landed on this branch** |
+| System-bar icon fix for the always-dark theme | Finished — landed on this branch |
+| **WireGuard + Headscale settings** (this guide's current focus) | **In progress — landed on this branch** |
 
-Tally: Finished 9 (5 original + the completed Hermit-reference set + URL/injection tools/changer + corrected virus scan) · In Progress 1 (system-bar fix) · Deferred 0 · Abandoned 0.
-[Certain] Everything compiles, `assembleDebug` succeeds and `testDebugUnitTest` passes (79 tests, unchanged by this fix). [Certain] This repo had real outbound network access at one point (to `urlhaus-api.abuse.ch`/`www.virustotal.com`, opened specifically for that purpose) which is how the virus-scan auth-key bug (section 4.8) was found and fixed; that access is not assumed available for this or future sessions. [Guessing] On-device/behavioral verification — including whether this fix actually renders correctly — is still outstanding for everything in this guide; no emulator or device is available in this build environment.
+Tally: Finished 10 (5 original + the completed Hermit-reference set + URL/injection tools/changer + corrected virus scan + system-bar fix) · In Progress 1 (WireGuard/Headscale) · Deferred 0 · Abandoned 0.
+[Certain] Everything compiles, `assembleDebug` succeeds and `testDebugUnitTest` passes (90 tests, 11 new for WireGuard/Headscale). [Certain] The WireGuard integration is the first feature in this app to use Android's `VpnService` — added at the operator's explicit request after being told this conflicts with the documented "VpnService slot reserved for the Victorious Mesh app" design (section 4.10). [Guessing] On-device/behavioral verification (including whether the tunnel actually connects, and whether the system-bar fix renders correctly) is outstanding for everything in this guide — no device or emulator in this build environment.
 [Certain] Status above for the first five rows is taken from `README.md` and git history, not from a build or test run in this session.
 
 ## 2. Purpose of the Hermit-reference work
@@ -82,6 +83,21 @@ in place of the bare call. **Done** (compiles; the actual rendering is unverifie
 device or emulator in this build environment, so this is reasoned from
 `androidx.activity`'s documented `SystemBarStyle` semantics, not observed).
 
+### 3d. WireGuard + Headscale settings (operator-requested; NOT Hermit-reference)
+
+Requested directly as "built-in advanced WireGuard and Headscale settings." The user
+was asked first whether this meant a WireGuard VPN client (which needs `VpnService`
+and conflicts with this app's documented VPN-slot-reserved-for-Mesh design) or a
+keyless Headscale API settings screen (no VPN involved) — and answered: both.
+
+| Tool | Package | Implementation | Status |
+|---|---|---|---|
+| WireGuard VPN client | `wireguard/` | `com.wireguard.android:tunnel` (Apache-2.0; see NOTICE) — the official embeddable engine (`GoBackend`, JNI-backed `wireguard-go`), not a hand-rolled reimplementation of the protocol. `WireGuardConfigBuilder` turns structured fields into wg-quick text and parses it with the library's own `Config.parse`. `WireGuardTunnelManager` implements `Tunnel` as a singleton and wraps `GoBackend.setState`. `WireGuardScreen` manages named profiles and the standard Android VPN-consent flow (`VpnService.prepare` + `ActivityResultContracts.StartActivityForResult`). | **Done — see 4.10 for the VPN-slot conflict.** Unit-tested unusually strongly for this app: `WireGuardConfigBuilderTest` runs against the **real** `com.wireguard.config.Config` parser (that package has no Android or native-code dependency, confirmed by decompiling the AAR, so it runs in a plain JUnit test) — a malformed key/CIDR/endpoint is rejected by the actual library, not a guess about it. `GoBackend`'s own native/VpnService path is NOT exercised — no device or emulator in this session. |
+| Headscale API settings | `headscale/` | `HeadscaleApiClient` — plain `HttpURLConnection` calls to a self-hosted Headscale server's `/api/v1` endpoints (list nodes, list/create pre-auth keys, expire a node), `Authorization: Bearer <key>`. No VPN; doesn't touch `VpnService`. | **Done, but the one API client in this app NOT verified against anything live** — Headscale is self-hosted, so (unlike URLhaus/VirusTotal, which this guide corrected after real `curl` testing — section 4.8) there was no server to test against. Request/response shapes are from Headscale's published docs and training knowledge; unit-tested only against hand-written JSON built from that documentation, explicitly flagged in the code as unverified and version-drift-prone (Headscale's `user` field has changed shape across releases). |
+
+Reachable from the launcher's **WireGuard** / **Headscale** buttons (new destinations
+in `MainActivity`, next to Sandboxes).
+
 ## 4. Implementation decisions
 
 1. Hermit is a spec only; no Hermit code or assets are reused. [Certain]
@@ -93,6 +109,9 @@ device or emulator in this build environment, so this is reasoned from
 7. Link shortening uses a public, keyless third-party endpoint (TinyURL). [Guessing] That endpoint could change its response format or go away; `LinkShortener.shorten` treats any non-200, blank, or `"Error..."`-prefixed body as a failure rather than guessing, so a format change fails loud (a `Shorten failed: …` message) instead of silently returning garbage.
 8. **Corrected, not just designed, after live testing.** The original version of this feature assumed URLhaus was "free and keyless" — true of that service once, not true as of this session. With real network access (granted this session for this specific purpose) I `curl`ed both `urlhaus-api.abuse.ch` and `www.virustotal.com` directly: URLhaus returns HTTP 401 `{"error":"Unauthorized"}` with no `Auth-Key` header, and HTTP 403 `{"query_status":"unknown_auth_key"}` with a wrong one; VirusTotal returns HTTP 401 `{"error":{"code":"AuthenticationRequiredError",...}}` without `x-apikey`. Both backends now require the operator's own key (`UrlHausSettings`, `VirusTotalSettings` — free accounts at auth.abuse.ch and virustotal.com respectively, neither of which I can create on the operator's behalf), stored the same way `BridgeSettings`/`NightModeSettings` store their state (SharedPreferences, this device only), each sent only to its own API's auth header. This is the one place in this guide where "verified" means something stronger than "compiles": the error-handling branches in `interpretUrlHausJson` are built from real response bodies, not from documentation or memory.
 9. A URLhaus miss is reported as "not listed", not "safe" — `UrlScanner.ScanVerdict.malicious = false` means absence from one database, and the UI text for that result says so rather than implying a clean bill of health.
+10. **WireGuard conflicts with this app's own documented architecture, and was built anyway because the operator explicitly chose that after being told so.** Every other networking feature in this app (`LocalProxyService`'s README, `WireGuardTunnelManager`'s own doc) exists specifically because "the device's single VPN/tun slot is reserved for a separate mesh-networking app" (Victorious Mesh) — and `com.wireguard.android:tunnel`'s `GoBackend` is, necessarily, a `VpnService`. Android allows exactly one active VPN system-wide; connecting this app's tunnel will tear down Victorious Mesh's if it's running, and vice versa, with no coordination possible from either app alone. `WireGuardScreen` says this plainly before Connect. This decision is not mine to walk back silently if it turns out to be a problem in practice — it was an explicit choice, made with the trade-off stated up front.
+11. WireGuard private keys are stored in plain SharedPreferences (`WireGuardProfileStore`) — the same mechanism, and the same honesty, as this app's other secrets, but a private key is categorically more sensitive (it's the device's identity on the mesh, not just an API credential). Flagged in the store's own doc as a candidate for `EncryptedSharedPreferences` if the threat model ever calls for it.
+12. Disconnect (`WireGuardTunnelManager.disconnect`) passes `null` as the `Config` argument to `GoBackend.setState` — verified by decompiling `GoBackend.class`'s bytecode, not assumed: the library's own public `setState` method hardcodes `null` internally on every DOWN transition regardless of what's passed, so this isn't a risky guess about undocumented behavior.
 
 ## 5. Maintenance procedures
 
@@ -106,7 +125,11 @@ device or emulator in this build environment, so this is reasoned from
 
 - Virus scan: VirusTotal's analysis is asynchronous — `checkVirusTotal` polls up to 3 times (2s then 3s gaps) before giving up and reporting "still queued" rather than blocking indefinitely. A scan that reports "still queued" is not a failure; re-running Scan a bit later often resolves it. URLhaus has no such delay (synchronous lookup). Both backends need their own key entered and saved in the dialog before Scan does anything useful — without one, that backend's line in the result just says "no key set, skipped".
 
-- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; 79 tests pass).
+- WireGuard: only one tunnel/profile can be connected at a time (`WireGuardTunnelManager` is a singleton `Tunnel` named "victorious"); connecting a second profile while one is up is a reconnect, not a parallel tunnel. Editing a profile that's currently connected doesn't live-reconfigure the tunnel — disconnect and reconnect. See implementation decisions 10–12 for the VPN-slot conflict, key storage, and the verified disconnect-passes-null behavior.
+
+- Headscale: the "user" field's expected shape (username vs. numeric ID) depends on your server's Headscale version — if `createPreAuthKey` fails, that's the first thing to check against your server's actual API docs, not assume this client is right.
+
+- Build: `./gradlew assembleDebug`; unit tests: `./gradlew testDebugUnitTest` (needs `ANDROID_HOME` pointing at an SDK with platform 35; 90 tests pass).
 - Any new third-party library or endpoint: add an entry to `NOTICE` (library) or note the dependency here (hosted endpoint, e.g. TinyURL) in the same commit.
 - Update this guide's status table and tally in the same commit as each feature lands.
 - Bridge protocol changes (new `browser.*` ops) require updating the README operations table and `BridgeCodecTest`.
@@ -114,10 +137,12 @@ device or emulator in this build environment, so this is reasoned from
 ## 6. Remaining work
 
 All six Hermit-reference features, URL/injection tools, the URL changer, virus
-scanning, and the always-dark system-bar fix are built. What's genuinely left is
-on-device verification for everything, plus (for virus scan specifically) a run
-with an actual valid key for each backend. Night mode follow-ups: optional
-per-panel override, bridge op.
+scanning, the always-dark system-bar fix, and WireGuard/Headscale settings are
+built. What's genuinely left is on-device verification for everything — and for
+WireGuard specifically, that means the one thing this session categorically could
+not test: whether the tunnel actually connects on a real device with a real VPN
+consent prompt. For virus scan, a run with an actual valid key for each backend.
+Night mode follow-ups: optional per-panel override, bridge op.
 
 ## 7. Future improvements
 
@@ -132,6 +157,8 @@ per-panel override, bridge op.
 - Injection tools: no history of what was run/injected (by design — these are one-off and not meant to be a second capture store); revisit if that proves useful.
 - Virus scan: no scan history either, same reasoning. Could add a third backend (e.g. Google Safe Browsing, also requires its own API key) behind the same "only call it if a key is set" pattern. A run with a real, valid key for each backend (never done this session) would confirm the "ok"/completed-analysis success paths, which are currently only unit-tested against hand-written JSON, not a captured real response.
 - A real light theme / theme toggle, if that's ever actually wanted — the app is currently permanently dark by design (no light `MaterialTheme`, no preference), and the system-bar fix in 3c assumes that stays true. If a light mode is ever added, `enableAlwaysDarkEdgeToEdge` needs to become theme-aware instead of unconditional.
+- WireGuard: per-app split tunneling (`Interface.Builder.includeApplication`/`excludeApplication` are already in the library's API, just not wired into `WireGuardScreen`), import a raw wg-quick file instead of only structured fields, statistics (`Backend.getStatistics`), a bridge op to connect/disconnect from the fleet controller. Coordinating with the Victorious Mesh app so the two don't fight over the VPN slot would need changes on that app's side too — out of reach from here.
+- Headscale: user/ACL-policy management, routes, expiring a pre-auth key (currently only node-expire is wired), and (the real priority) confirming the request/response shapes against an actual running server, since none was available this session.
 - **On-device verification pass across every feature in this guide** — this is the actual next step, not a new feature.
 
 ## 8. Artifacts generated
@@ -145,5 +172,7 @@ per-panel override, bridge op.
 - `sandbox/Sandbox.kt` (`SandboxName`), `SandboxManager.kt`, `SandboxesScreen.kt`, `SandboxNameTest.kt`
 - `urltools/UrlTools.kt`, `LinkShortener.kt`, `UrlToolsDialog.kt`, `UrlToolsTest.kt`, `LinkShortenerTest.kt`
 - `urltools/UrlScanner.kt`, `VirusTotalSettings.kt`, `UrlHausSettings.kt`, `UrlScannerTest.kt`
-- `ui/theme/EdgeToEdge.kt`
 - `inject/InjectionTools.kt`, `InjectionController.kt`, `InjectionDialog.kt`, `InjectionToolsTest.kt`
+- `ui/theme/EdgeToEdge.kt`
+- `wireguard/WireGuardConfigBuilder.kt`, `WireGuardProfileStore.kt`, `WireGuardTunnelManager.kt`, `WireGuardScreen.kt`, `WireGuardConfigBuilderTest.kt`
+- `headscale/HeadscaleSettings.kt`, `HeadscaleApiClient.kt`, `HeadscaleScreen.kt`, `HeadscaleApiClientTest.kt`

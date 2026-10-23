@@ -97,6 +97,12 @@ dependencies {
     implementation(libs.bouncycastle.bcprov)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
+    // WireGuard VPN client (GoBackend/VpnService) — see NOTICE
+    implementation(libs.wireguard.tunnel)
+
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    // com.wireguard.config.* (Config/Interface/Peer/Key) has no Android or native-code
+    // dependency, so it's usable directly in a plain JUnit test — see WireGuardConfigBuilderTest.
+    testImplementation(libs.wireguard.tunnel)
 }

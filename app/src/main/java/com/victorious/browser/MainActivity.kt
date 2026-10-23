@@ -21,6 +21,7 @@ import com.victorious.browser.bridge.FleetControlScreen
 import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.browser.TabStore
 import com.victorious.browser.browser.TabbedBrowserScreen
+import com.victorious.browser.headscale.HeadscaleScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.help.HelpScreen
 import com.victorious.browser.home.HomeScreen
@@ -41,6 +42,7 @@ import com.victorious.browser.ui.theme.VictoriousBrowserTheme
 import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
 import com.victorious.browser.userscript.UserScriptsScreen
 import com.victorious.browser.webext.ExtensionsScreen
+import com.victorious.browser.wireguard.WireGuardScreen
 import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
@@ -94,6 +96,8 @@ private sealed class AppDestination {
     data object Evidence : AppDestination()
     data object AntiPhish : AppDestination()
     data object Help : AppDestination()
+    data object WireGuard : AppDestination()
+    data object Headscale : AppDestination()
 }
 
 @Composable
@@ -153,6 +157,8 @@ fun VictoriousBrowserApp(
                 onOpenHome = { destination = AppDestination.Home },
                 onOpenHelp = { destination = AppDestination.Help },
                 onOpenExtensions = { destination = AppDestination.Extensions },
+                onOpenWireGuard = { destination = AppDestination.WireGuard },
+                onOpenHeadscale = { destination = AppDestination.Headscale },
             )
             AppDestination.Home -> HomeScreen(
                 modifier = pad,
@@ -254,6 +260,14 @@ fun VictoriousBrowserApp(
                 onOpenSandbox = { name ->
                     destination = AppDestination.SandboxBrowser(url = "https://example.com", sandbox = name)
                 },
+            )
+            AppDestination.WireGuard -> WireGuardScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
+            )
+            AppDestination.Headscale -> HeadscaleScreen(
+                modifier = pad,
+                onBack = { destination = AppDestination.Launcher },
             )
         }
     }
