@@ -27,3 +27,19 @@ val StatusWarn = Color(0xFFFFB020)
 val StatusDanger = Color(0xFFFF4D6A)
 val StatusRunning = NeonCyan
 val StatusIdle = Color(0xFF7A818C)
+
+// ── Light-theme ramp (same brand accents, opt-in alternative to the charcoal
+// base above) ────────────────────────────────────────────────────────────────
+val CloudBase = Color(0xFFF4F5F7)
+val Cloud = Color(0xFFFFFFFF)
+val CloudElevated = Color(0xFFFFFFFF)
+val CloudHigh = Color(0xFFE9EBEF)
+val CloudLine = Color(0xFFD7DAE1)
+
+val OnLight = Color(0xFF1A1C20)
+val OnLightMuted = Color(0xFF5B6069)
+
+// The raw neon accents are too low-contrast as text/icon color on a light
+// background; darker variants keep the brand hue while staying readable.
+val NeonCyanOnLight = Color(0xFF0088A3)
+val NeonMagentaOnLight = Color(0xFFB4009E)

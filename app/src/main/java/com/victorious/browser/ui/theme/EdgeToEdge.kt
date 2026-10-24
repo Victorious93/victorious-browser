@@ -7,18 +7,22 @@ import androidx.activity.enableEdgeToEdge
 
 /**
  * [enableEdgeToEdge] with no arguments picks light-vs-dark status/navigation-bar icon
- * color based on the *device's* system day/night setting, not this app's content. This
- * app's UI (see [VictoriousBrowserTheme]) is permanently dark — there is no light
- * variant — so on a device set to system Light mode, the stock call would render dark
- * icons over our charcoal background: low-contrast at best, invisible at worst.
+ * color based on the *device's* system day/night setting, not this app's own content.
+ * This app's theme is an explicit in-app toggle (see [ThemeSettings]), independent of
+ * the device setting, so the bare call can mismatch: e.g. device in Light mode while
+ * this app is still showing its charcoal dark theme would render dark icons over a
+ * dark background -- low-contrast at best, invisible at worst.
  *
- * This forces light (white) system-bar icons unconditionally, matching the UI's actual
- * color regardless of the device's own theme setting. Call this instead of the bare
- * `enableEdgeToEdge()` in every Activity that uses [VictoriousBrowserTheme].
+ * Call this instead of the bare `enableEdgeToEdge()` in every Activity that uses
+ * [VictoriousBrowserTheme], passing the same `darkTheme` flag, and call it again
+ * whenever that flag changes (e.g. from a `LaunchedEffect(darkTheme)`) so the system
+ * bars stay in sync with an in-session toggle.
  */
-fun ComponentActivity.enableAlwaysDarkEdgeToEdge() {
-    enableEdgeToEdge(
-        statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-    )
+fun ComponentActivity.enableThemedEdgeToEdge(darkTheme: Boolean) {
+    val style = if (darkTheme) {
+        SystemBarStyle.dark(Color.TRANSPARENT)
+    } else {
+        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+    }
+    enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
 }

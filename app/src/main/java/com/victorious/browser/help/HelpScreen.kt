@@ -39,7 +39,6 @@ import com.victorious.browser.ui.components.NeonSectionHeader
 import com.victorious.browser.ui.components.ToolScaffold
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
-import com.victorious.browser.ui.theme.OnDarkMuted
 
 /** Loads and parses the bundled manual asset. Cached per-process. */
 object ManualAsset {
@@ -98,7 +97,7 @@ fun HelpScreen(
                 Text(
                     "${results.size} of ${doc.sections.size} sections",
                     style = MaterialTheme.typography.labelSmall,
-                    color = OnDarkMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
