@@ -217,7 +217,7 @@ object MeshReachability {
 
     /**
      * [Likely] A TRANSPORT_VPN network that belongs to Victorious Mesh:
-     * owner UID (API 29+, often hidden from non-owner apps → INVALID_UID) equals
+     * owner UID (API 30+, often hidden from non-owner apps → INVALID_UID) equals
      * the `com.victorious.mesh` uid, OR the VPN's LinkProperties carry an
      * address inside the configured mesh ranges.
      */
@@ -230,7 +230,7 @@ object MeshReachability {
             cm.allNetworks.any { n ->
                 val caps = cm.getNetworkCapabilities(n) ?: return@any false
                 if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@any false
-                if (meshUid != null && android.os.Build.VERSION.SDK_INT >= 29 &&
+                if (meshUid != null && android.os.Build.VERSION.SDK_INT >= 30 &&
                     caps.ownerUid == meshUid
                 ) return@any true
                 val lp = cm.getLinkProperties(n) ?: return@any false

@@ -38,7 +38,7 @@ object ContentBlocker {
             "google-analytics.com",
             "googletagmanager.com",
             "scorecardresearch.com",
-            "facebook.com/tr",
+            "connect.facebook.net",
         ),
         BlockCategory.ADULT to emptySet(),
     )
