@@ -13,6 +13,15 @@ class ContentBlockerTest {
     }
 
     @Test
+    fun blocksFacebookTrackerHost() {
+        val enabled = setOf(BlockCategory.TRACKERS)
+        assertEquals(BlockCategory.TRACKERS, ContentBlocker.isBlocked("connect.facebook.net", enabled))
+        // Matching is host-suffix only: a bare host can never equal a host+path
+        // string like "facebook.com/tr", so this must stay a real hostname.
+        assertNull(ContentBlocker.isBlocked("facebook.com", enabled))
+    }
+
+    @Test
     fun doesNotMatchUnrelatedHosts() {
         assertNull(ContentBlocker.isBlocked("example.com", setOf(BlockCategory.TRACKERS)))
         assertNull(ContentBlocker.isBlocked("notgoogle-analytics.com", setOf(BlockCategory.TRACKERS)))

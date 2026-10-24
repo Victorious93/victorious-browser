@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
 import java.io.File
 
 /**
@@ -34,6 +35,7 @@ object MediaStoreDownloads {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun writeViaMediaStore(
         context: Context,
         displayName: String,
