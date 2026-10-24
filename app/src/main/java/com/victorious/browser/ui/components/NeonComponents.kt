@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.dp
 import com.victorious.browser.ui.theme.Brand
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
-import com.victorious.browser.ui.theme.OnDarkMuted
 import com.victorious.browser.ui.theme.StatusDanger
 import com.victorious.browser.ui.theme.StatusIdle
 import com.victorious.browser.ui.theme.StatusOk
@@ -283,7 +282,7 @@ fun ToolScaffold(
                             Text(
                                 subtitle,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = OnDarkMuted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -345,7 +344,7 @@ fun NeonToolHeader(
             Column(Modifier.weight(1f)) {
                 GradientTitle(title, style = MaterialTheme.typography.titleLarge)
                 if (subtitle != null) {
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = OnDarkMuted)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (actions != null) {

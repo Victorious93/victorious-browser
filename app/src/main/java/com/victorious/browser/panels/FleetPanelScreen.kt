@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
+import com.victorious.browser.ui.theme.ThemeSettings
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -120,6 +121,8 @@ fun FleetPanelScreen(
     var meshSettings by remember { mutableStateOf(MeshConfigStore.load(context)) }
     var meshBridgeState by remember { mutableStateOf<MeshBridgeState>(MeshBridgeState.Off) }
     var editingMeshSettings by remember { mutableStateOf(false) }
+    val themeSettings = remember { ThemeSettings.get(context) }
+    val useLightTheme by themeSettings.useLightTheme.collectAsState()
 
     val appContext = context.applicationContext
 
@@ -271,12 +274,20 @@ fun FleetPanelScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
-                    com.victorious.browser.ui.components.QuickAction(
-                        "Home",
-                        Icons.Filled.Home,
-                        NeonCyan,
-                        onClick = onOpenHome,
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        com.victorious.browser.ui.components.QuickAction(
+                            "Home",
+                            Icons.Filled.Home,
+                            NeonCyan,
+                            onClick = onOpenHome,
+                        )
+                        com.victorious.browser.ui.components.QuickAction(
+                            if (useLightTheme) "Light theme" else "Dark theme",
+                            Icons.Filled.Settings,
+                            NeonMagenta,
+                            onClick = { themeSettings.toggle() },
+                        )
+                    }
                 }
             }
         }

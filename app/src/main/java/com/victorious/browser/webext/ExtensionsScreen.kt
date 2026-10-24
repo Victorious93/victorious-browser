@@ -42,7 +42,6 @@ import com.victorious.browser.ui.components.NeonOutlineButton
 import com.victorious.browser.ui.components.ToolScaffold
 import com.victorious.browser.ui.theme.NeonCyan
 import com.victorious.browser.ui.theme.NeonMagenta
-import com.victorious.browser.ui.theme.OnDarkMuted
 
 /**
  * Extension manager for the WebView-native userscript engine.
@@ -95,7 +94,7 @@ fun ExtensionsScreen(
                 "Runs Greasemonkey/Tampermonkey-style userscripts injected into WebView pages. " +
                     "A system WebView cannot load .crx/.xpi packages — there is no WebExtension API.",
                 style = MaterialTheme.typography.labelSmall,
-                color = OnDarkMuted,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -185,7 +184,7 @@ private fun ExtensionRow(
                         if (ext.includes.isNotEmpty()) append(" · ${ext.includes.size} include")
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = OnDarkMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 if (ext.description.isNotBlank()) {
@@ -211,7 +210,7 @@ private fun ImportDialog(onDismiss: () -> Unit, onImport: (String) -> Unit) {
                 Text(
                     "Paste a full .user.js including the ==UserScript== block. Cap " +
                         "${ExtensionRegistry.MAX_SOURCE_BYTES / 1024} KB.",
-                    style = MaterialTheme.typography.labelSmall, color = OnDarkMuted,
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(6.dp))
                 OutlinedTextField(

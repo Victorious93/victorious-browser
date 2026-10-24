@@ -26,7 +26,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.victorious.browser.ui.theme.OnDarkMuted
 
 /**
  * A launcher dashboard tile: tinted icon badge, title and short description,
@@ -74,7 +73,7 @@ fun ToolTile(
         Text(
             description,
             style = MaterialTheme.typography.bodySmall,
-            color = OnDarkMuted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )

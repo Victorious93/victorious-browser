@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,8 +39,9 @@ import com.victorious.browser.evidence.EvidenceScreen
 import com.victorious.browser.antiphish.AntiPhishScreen
 import com.victorious.browser.msf.MsfConsoleScreen
 import com.victorious.browser.sandbox.SandboxesScreen
+import com.victorious.browser.ui.theme.ThemeSettings
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
-import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
+import com.victorious.browser.ui.theme.enableThemedEdgeToEdge
 import com.victorious.browser.userscript.UserScriptsScreen
 import com.victorious.browser.webext.ExtensionsScreen
 import com.victorious.browser.wireguard.WireGuardScreen
@@ -51,9 +53,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeOpenUrl(intent)
-        enableAlwaysDarkEdgeToEdge()
+        val themeSettings = ThemeSettings.get(this)
         setContent {
-            VictoriousBrowserTheme {
+            val useLightTheme by themeSettings.useLightTheme.collectAsState()
+            LaunchedEffect(useLightTheme) { enableThemedEdgeToEdge(darkTheme = !useLightTheme) }
+            VictoriousBrowserTheme(darkTheme = !useLightTheme) {
                 VictoriousBrowserApp(
                     pendingOpenUrl = pendingOpenUrl.value,
                     onPendingConsumed = { pendingOpenUrl.value = null },

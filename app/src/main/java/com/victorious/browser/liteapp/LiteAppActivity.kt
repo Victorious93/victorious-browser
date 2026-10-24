@@ -8,11 +8,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.victorious.browser.browser.BrowserScreen
 import com.victorious.browser.panels.PanelStore
+import com.victorious.browser.ui.theme.ThemeSettings
 import com.victorious.browser.ui.theme.VictoriousBrowserTheme
-import com.victorious.browser.ui.theme.enableAlwaysDarkEdgeToEdge
+import com.victorious.browser.ui.theme.enableThemedEdgeToEdge
 
 /**
  * Chrome-less host for a single panel, launched from a pinned shortcut. Runs in its
@@ -30,9 +34,11 @@ class LiteAppActivity : ComponentActivity() {
             return
         }
         title = panel.name
-        enableAlwaysDarkEdgeToEdge()
+        val themeSettings = ThemeSettings.get(this)
         setContent {
-            VictoriousBrowserTheme {
+            val useLightTheme by themeSettings.useLightTheme.collectAsState()
+            LaunchedEffect(useLightTheme) { enableThemedEdgeToEdge(darkTheme = !useLightTheme) }
+            VictoriousBrowserTheme(darkTheme = !useLightTheme) {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = MaterialTheme.colorScheme.background,

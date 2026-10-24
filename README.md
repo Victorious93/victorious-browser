@@ -623,14 +623,18 @@ Release signing is left to CI secrets — no release key is committed.
 
 ## Brand
 
-Dark charcoal UI with neon cyan (`#00E5FF`) → magenta (`#FF00E5`) accent ring theme.
-`VictoriousBrowserTheme` is a single, hardcoded dark `MaterialTheme` — there is no
-light variant and no toggle; the app is permanently dark by design.
-`enableAlwaysDarkEdgeToEdge()` (`ui/theme/EdgeToEdge.kt`), called from every
-Activity, forces light (white) status/navigation-bar icons unconditionally — the
-stock `enableEdgeToEdge()` instead follows the *device's* system day/night setting,
-which would otherwise mismatch this app's always-dark background on a phone set to
-system Light mode.
+Dark charcoal UI with neon cyan (`#00E5FF`) → magenta (`#FF00E5`) accent ring theme,
+plus an opt-in light variant (same accent hues, darkened for contrast on a light
+background). `VictoriousBrowserTheme(darkTheme: Boolean)` (`ui/theme/Theme.kt`)
+switches between the two `MaterialTheme` color schemes; the choice is a persisted
+in-app toggle (`ThemeSettings`, "Dark theme"/"Light theme" quick action on the
+launcher's Hero), not the device's system day/night setting. Defaults to dark,
+matching the app's original design.
+`enableThemedEdgeToEdge(darkTheme)` (`ui/theme/EdgeToEdge.kt`), called from every
+Activity and re-invoked whenever the toggle changes, sets status/navigation-bar
+icon color to match whichever theme is actually showing — the stock
+`enableEdgeToEdge()` instead follows the *device's* system day/night setting, which
+can mismatch this app's own in-session theme choice.
 
 ## Third-party licenses
 
