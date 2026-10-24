@@ -1,6 +1,7 @@
 # Victorious Framework — Victorious Browser Living Guide
 
-Last updated: 2026-10-23 (WireGuard + Headscale settings, rebased onto `main`'s subsequent batches). This guide is updated whenever project state changes.
+Last updated: 2026-10-24 (bug-testing pass + 0.2.0 release push — see §9). This guide is updated whenever project state changes.
+[Certain] §§1–8 below predate several features merged to `main` after 2026-10-23 (light theme toggle, Mesh fleet bridge, WebView-native userscript/extensions engine, help/manual screen, and the recon/pentest tool surface: MSF console, active scanner, fuzzer, OSINT, evidence export). This pass's scope was bug-testing + a release push, not a full resync — §§1–8's inventory is not re-verified against current `main` and should not be read as current status for anything landed after WireGuard/Headscale.
 Last bridge update: 2026-10-20 — frozen remote-control envelope v1 (MINOR=1): capabilities.get, remote.command, macro.step/run, node.status.get, config.export/import. See docs/MANUAL.md.
 Confidence labels: **[Certain]** known/verified, **[Likely]** strong inference, **[Guessing]** assumption.
 
@@ -176,3 +177,19 @@ Night mode follow-ups: optional per-panel override, bridge op.
 - `ui/theme/EdgeToEdge.kt`
 - `wireguard/WireGuardConfigBuilder.kt`, `WireGuardProfileStore.kt`, `WireGuardTunnelManager.kt`, `WireGuardScreen.kt`, `WireGuardConfigBuilderTest.kt`
 - `headscale/HeadscaleSettings.kt`, `HeadscaleApiClient.kt`, `HeadscaleScreen.kt`, `HeadscaleApiClientTest.kt`
+
+## 9. Bug-testing pass + 0.2.0 release (2026-10-24)
+
+[Certain] Found by reading `bridge/BridgeDispatcher.kt` and `certmgr/CertScreen.kt` together, not by a report: `proxy.status`'s `ca_installed` field was hardcoded `true` unconditionally — there was no check anywhere in the codebase for whether the active inspection root is actually one the browser's own WebView trusts.
+
+The real defect this was hiding: `network_security_config.xml`'s trust-anchor is a compiled resource (`@raw/inspect_root`), fixed to the ORIGINAL baked-in root at build time and not swappable at runtime. `certmgr/CertScreen.kt`'s "Regenerate root" action (`LocalCaProvider.persistRegenerated`) writes a brand-new root to `filesDir`, and `LocalProxyService` prefers that regenerated root for signing intercepted leaf certs on next proxy start — but the WebView still only trusts the old baked root, so **every HTTPS page fails to load through the proxy** after regenerating, until the user taps "Revert to baked". The on-screen warnings (both the inline card and the confirm dialog) only mentioned previously-exported/installed CAs breaking — not that the browser breaks its own interception. A fleet controller polling `proxy.status` over the bridge would be told the CA is fine the whole time.
+
+**Fixed:**
+- `BridgeDispatcher.proxyStatus`: `ca_installed` now reports `!LocalCaProvider.hasRegenerated(context)` — true only when the active signing root is the one the WebView's static trust-anchor actually matches.
+- `CertScreen.kt`: both warning strings (inline card + confirm dialog) now say plainly that regenerating also breaks this browser's own HTTPS interception until the new root is installed or reverted.
+
+[Guessing] Not covered by a new unit test: `BridgeDispatcher` takes a real `android.content.Context` (SharedPreferences, Intent, Uri) and this project has no Robolectric dependency, so — consistent with every other `Context`-coupled class here (`CallerVerifier`, `LocalProxyService`, etc.) — it isn't unit-testable in plain JUnit. The fix is a one-line boolean flip calling an already-tested-by-nothing-else pure function (`LocalCaProvider.hasRegenerated`); verifying it end-to-end needs a device or Robolectric, same gap as everything else in §1's "on-device verification outstanding" row.
+
+[Certain] `versionCode`/`versionName` bumped 1/`0.1.0` → 2/`0.2.0` (first bump since this project's inception — six feature PRs had landed since 0.1.0 without one). No other behavior changed in this pass; this was a bug-fix + version-bump push, not a new feature.
+
+[Likely] This session's build environment had a flaky egress proxy (same request to the same real, existing Maven artifact alternated between a correct 200 and a bogus 404 roughly half the time) that made Gradle dependency resolution unreliable; this is environment-specific to this sandbox and not expected to affect GitHub Actions CI, which has normal network access. Worked around by looping `./gradlew test` until every dependency landed in the local cache, not by changing any repository configuration in the committed project.
