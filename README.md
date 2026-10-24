@@ -368,12 +368,26 @@ The browsing surface is a single system **WebView** hosted in Jetpack Compose vi
 `AndroidView` (no embedded Chromium / Gecko binary).
 
 - Address bar + Go, Back, Forward, Reload, and a load-progress indicator
+- **Search or enter address**: input with a scheme or a host (`example.com`,
+  `localhost:3000`) loads as a URL; anything else (e.g. `best pizza recipes`) is sent to
+  the default search engine (DuckDuckGo). See `normalizeUrl` / `looksLikeUrl`.
+- Regular-browser chrome on the tabbed browser: compact nav bar (Back / Forward /
+  Reload) with a bookmark **☆** toggle and a **⋮ overflow menu** holding the rest —
+  New tab, Find in page, Share link, Copy link, Bookmarks, the toggles (Reader /
+  Night / Desktop site / per-host Extensions), and the recon tools (Fleet panels,
+  Extensions, User scripts, URL tools, Inject, Screenshot, Network log). Previously
+  every control sat in one non-scrolling row that overflowed and clipped off-screen.
+- **Bookmarks** (`BookmarkStore`): star the current page; open / open-in-new-tab /
+  remove from a bottom sheet. SharedPreferences + JSON, same pattern as the other stores.
+- **Find in page**: a find bar backed by `WebView.findAllAsync` with match count and
+  prev/next.
+- **Share** (`ACTION_SEND`) and **Copy link** (clipboard) for the current page.
 - Custom `WebViewClient` / `WebChromeClient` keep http(s) navigation in-app
 - Recon-oriented defaults: JavaScript + DOM storage on, cookies via `CookieManager`,
   mixed content set to `MIXED_CONTENT_COMPATIBILITY_MODE` (noted in code)
-- Optional Desktop / Mobile UA toggle
-- **Night** chip: dark rendering for any site via `androidx.webkit` algorithmic darkening
-  (falls back to force-dark on older WebViews); persisted across launches
+- Optional Desktop / Mobile UA toggle (now in the ⋮ menu)
+- **Night mode** (⋮ menu): dark rendering for any site via `androidx.webkit` algorithmic
+  darkening (falls back to force-dark on older WebViews); persisted across launches
 - `androidx.webkit` `ProxyController` routes the WebView through the local
   inspection proxy when enabled (see below)
 

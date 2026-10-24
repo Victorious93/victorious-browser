@@ -407,10 +407,41 @@ private fun NavButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** Accept bare hosts / search-ish input by coercing to https:// when no scheme is given. */
+/**
+ * Turn address-bar input into a URL, like a regular browser's "search or enter address":
+ *   - already has a scheme (`https://`, `http://`, `about:`, `file:`, `data:`, …) → use as-is
+ *   - looks like a host/URL (a dotted host, `localhost`, or an explicit `host:port`) → prepend `https://`
+ *   - anything else (spaces, or a single bare word with no dot) → web search via [SEARCH_URL]
+ */
 internal fun normalizeUrl(raw: String): String {
     val trimmed = raw.trim()
     if (trimmed.isEmpty()) return HOME_URL
-    val hasScheme = trimmed.contains("://")
-    return if (hasScheme) trimmed else "https://$trimmed"
+    // Hierarchical URL with an explicit scheme, e.g. https://… , or a known opaque
+    // scheme (about:blank, data:…, mailto:…). A known-scheme allowlist is used rather
+    // than a generic "word:" match so host:port input like "localhost:3000" is NOT
+    // mistaken for a scheme.
+    if (trimmed.contains("://")) return trimmed
+    val lower = trimmed.lowercase()
+    if (OPAQUE_SCHEMES.any { lower.startsWith(it) }) return trimmed
+    if (looksLikeUrl(trimmed)) return "https://$trimmed"
+    return SEARCH_URL + java.net.URLEncoder.encode(trimmed, "UTF-8")
 }
+
+private val OPAQUE_SCHEMES = listOf(
+    "about:", "data:", "file:", "mailto:", "tel:", "javascript:",
+    "view-source:", "blob:", "content:",
+)
+
+/** Heuristic: does this no-scheme input name a host rather than a search query? */
+internal fun looksLikeUrl(input: String): Boolean {
+    if (input.any { it.isWhitespace() }) return false
+    val host = input.substringBefore('/').substringBefore('?').substringBefore('#')
+    if (host.equals("localhost", ignoreCase = true) || host.startsWith("localhost:")) return true
+    // host[:port] with at least one dot and no dot at either end (rules out "3.14" style but
+    // allows example.com, a.b.c, 127.0.0.1:8080).
+    val hostNoPort = host.substringBefore(':')
+    return hostNoPort.contains('.') && !hostNoPort.startsWith('.') && !hostNoPort.endsWith('.')
+}
+
+/** Default search engine: DuckDuckGo (privacy-respecting, fits this app's role). */
+internal const val SEARCH_URL = "https://duckduckgo.com/?q="

@@ -1,5 +1,9 @@
 package com.victorious.browser.browser
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -13,7 +17,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,9 +38,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -156,6 +165,16 @@ fun TabbedBrowserScreen(
     val panels by panelStore.panels.collectAsState()
     var showSwitcher by remember { mutableStateOf(false) }
 
+    // Regular-browser chrome: bookmarks, overflow menu, find-in-page.
+    val bookmarkStore = remember { BookmarkStore.get(appContext) }
+    val bookmarks by bookmarkStore.bookmarks.collectAsState()
+    var menuOpen by remember { mutableStateOf(false) }
+    var showBookmarks by remember { mutableStateOf(false) }
+    var showFind by remember { mutableStateOf(false) }
+    var findQuery by remember { mutableStateOf("") }
+    var findMatches by remember { mutableStateOf(0) }
+    var findOrdinal by remember { mutableStateOf(0) }
+
     // Mesh gating (same contract as FleetPanelScreen).
     var meshChecking by remember { mutableStateOf(false) }
     var meshBlock by remember { mutableStateOf<MeshOpenDecision.Blocked?>(null) }
@@ -250,6 +269,94 @@ fun TabbedBrowserScreen(
                 }
             }
         }
+    }
+
+    fun currentUrl(): String = activeTab?.url?.takeIf { it.isNotBlank() } ?: urlBarText
+
+    fun shareUrl() {
+        val url = currentUrl()
+        if (url.isBlank()) {
+            Toast.makeText(appContext, "No URL to share", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, url)
+        }
+        runCatching { context.startActivity(Intent.createChooser(send, "Share link")) }
+            .onFailure { Toast.makeText(appContext, "No app available to share", Toast.LENGTH_SHORT).show() }
+    }
+
+    fun copyUrl() {
+        val url = currentUrl()
+        if (url.isBlank()) return
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        cm?.setPrimaryClip(ClipData.newPlainText("url", url))
+        Toast.makeText(appContext, "Link copied", Toast.LENGTH_SHORT).show()
+    }
+
+    fun toggleReader() {
+        val id = activeId ?: return
+        val wv = webViews[id] ?: return
+        if (readerTabs.isActive(id)) {
+            val url = readerTabs.exit(id) ?: tabStore.get(id)?.url
+            readerVersion++
+            url?.let { wv.loadUrl(it) }
+        } else {
+            val url = tabStore.get(id)?.url ?: wv.url.orEmpty()
+            ReaderModeController.enter(wv, nightMode) { found ->
+                if (found) {
+                    readerTabs.enter(id, url)
+                    readerVersion++
+                } else {
+                    Toast.makeText(appContext, "Reader mode isn't available for this page", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun captureShot() {
+        val id = activeId
+        val wv = id?.let { webViews[it] }
+        if (wv == null) {
+            Toast.makeText(appContext, "No active page to capture", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val bmp = WebViewCapture.capture(wv)
+        if (bmp == null) {
+            Toast.makeText(appContext, "Capture failed", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val store = EvidenceStore.get(appContext)
+        val case = store.ensureActiveCase()
+        val host = hostOf(tabStore.get(id)?.url ?: wv.url.orEmpty()).orEmpty()
+        store.addScreenshot(case.id, bmp, host = host, title = host.ifEmpty { "screenshot" })
+        Toast.makeText(appContext, "Saved to evidence: " + case.name, Toast.LENGTH_SHORT).show()
+    }
+
+    fun runFind(q: String) {
+        val wv = activeId?.let { webViews[it] } ?: return
+        wv.setFindListener { active, count, done ->
+            if (done) {
+                findMatches = count
+                findOrdinal = if (count > 0) active + 1 else 0
+            }
+        }
+        if (q.isBlank()) {
+            wv.clearMatches()
+            findMatches = 0
+            findOrdinal = 0
+        } else {
+            wv.findAllAsync(q)
+        }
+    }
+
+    fun closeFind() {
+        showFind = false
+        findQuery = ""
+        findMatches = 0
+        findOrdinal = 0
+        activeId?.let { webViews[it]?.clearMatches() }
     }
 
     // Destroy all WebViews when the screen leaves composition.
@@ -347,7 +454,9 @@ fun TabbedBrowserScreen(
             com.victorious.browser.ui.components.NeonButton("Go", onClick = { navigateTo(urlBarText) })
         }
 
-        // Nav controls
+        // Nav controls: compact — back / forward / reload, then bookmark + overflow
+        // menu. Everything else (tools, toggles, panels) lives in the ⋮ menu so the
+        // chrome no longer overflows and clips controls off-screen.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -363,136 +472,172 @@ fun TabbedBrowserScreen(
             NavButton("↻", enabled = activeId != null) {
                 activeId?.let { webViews[it]?.reload() }
             }
-            TextButton(
-                onClick = { showSwitcher = true },
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
-            ) { Text("Panels ▾") }
             Spacer(Modifier.weight(1f))
-            FilterChip(
-                selected = desktopUa,
+
+            val bmUrl = activeTab?.url ?: ""
+            val isBookmarked = bmUrl.isNotBlank() && bookmarks.any { it.url == bmUrl }
+            IconButton(
+                enabled = bmUrl.isNotBlank(),
                 onClick = {
-                    desktopUa = !desktopUa
-                    webViews.values.forEach { wv ->
-                        applyVictoriousWebSettings(wv, desktopUa)
-                    }
-                    activeId?.let { webViews[it]?.reload() }
+                    val now = bookmarkStore.toggle(bmUrl, activeTab?.title ?: "")
+                    Toast.makeText(
+                        appContext,
+                        if (now) "Bookmarked" else "Bookmark removed",
+                        Toast.LENGTH_SHORT,
+                    ).show()
                 },
-                label = { Text(if (desktopUa) "Desktop UA" else "Mobile UA") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
-                    selectedLabelColor = NeonCyan,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-            Spacer(Modifier.width(4.dp))
-            FilterChip(
-                selected = nightMode,
-                onClick = { nightSettings.setEnabled(!nightMode) },
-                label = { Text("Night") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = NeonMagenta.copy(alpha = 0.25f),
-                    selectedLabelColor = NeonMagenta,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-            Spacer(Modifier.width(4.dp))
-            @Suppress("UNUSED_EXPRESSION") readerVersion // recompose on reader changes
-            val activeReader = activeId?.let { readerTabs.isActive(it) } == true
-            FilterChip(
-                selected = activeReader,
-                onClick = {
-                    val id = activeId ?: return@FilterChip
-                    val wv = webViews[id] ?: return@FilterChip
-                    if (activeReader) {
-                        val url = readerTabs.exit(id) ?: tabStore.get(id)?.url
-                        readerVersion++
-                        url?.let { wv.loadUrl(it) }
-                    } else {
-                        val url = tabStore.get(id)?.url ?: wv.url.orEmpty()
-                        ReaderModeController.enter(wv, nightMode) { found ->
-                            if (found) {
-                                readerTabs.enter(id, url)
-                                readerVersion++
-                            } else {
-                                Toast.makeText(appContext, "Reader mode isn't available for this page", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+            ) {
+                Icon(
+                    Icons.Filled.Star,
+                    contentDescription = if (isBookmarked) "Remove bookmark" else "Add bookmark",
+                    tint = if (isBookmarked) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = NeonCyan)
+                }
+                @Suppress("UNUSED_EXPRESSION") readerVersion // recompose on reader changes
+                val readerOn = activeId?.let { readerTabs.isActive(it) } == true
+                val activeHost = run {
+                    val u = activeId?.let { tabStore.get(it)?.url } ?: ""
+                    runCatching { URI(u).host?.lowercase() }.getOrNull()
+                }
+                val extsPaused = activeHost != null && activeHost in pausedHosts
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("New tab") },
+                        onClick = { menuOpen = false; tabStore.openTab(HOME_URL) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Find in page") },
+                        onClick = { menuOpen = false; showFind = true },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share link") },
+                        onClick = { menuOpen = false; shareUrl() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Copy link") },
+                        onClick = { menuOpen = false; copyUrl() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Bookmarks") },
+                        onClick = { menuOpen = false; showBookmarks = true },
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(if (readerOn) "Reader mode: on" else "Reader mode: off") },
+                        onClick = { menuOpen = false; toggleReader() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (nightMode) "Night mode: on" else "Night mode: off") },
+                        onClick = { nightSettings.setEnabled(!nightMode); menuOpen = false },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (desktopUa) "Desktop site: on" else "Desktop site: off") },
+                        onClick = {
+                            desktopUa = !desktopUa
+                            webViews.values.forEach { applyVictoriousWebSettings(it, desktopUa) }
+                            activeId?.let { webViews[it]?.reload() }
+                            menuOpen = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (extsPaused) "Extensions: off here" else "Extensions: on here") },
+                        enabled = activeHost != null,
+                        onClick = {
+                            activeHost?.let { extStore.setHostPaused(it, it !in pausedHosts) }
+                            menuOpen = false
+                        },
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Fleet panels…") },
+                        onClick = { menuOpen = false; showSwitcher = true },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Extensions") },
+                        onClick = { menuOpen = false; onOpenExtensions() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("User scripts") },
+                        onClick = { menuOpen = false; onOpenScripts() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("URL tools") },
+                        onClick = { menuOpen = false; showUrlTools = true },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Inject JS / HTML") },
+                        onClick = { menuOpen = false; showInject = true },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Screenshot → evidence") },
+                        onClick = { menuOpen = false; captureShot() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Network log") },
+                        onClick = { menuOpen = false; onOpenNetwork() },
+                    )
+                    if (onBackToLauncher != null) {
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Back to launcher") },
+                            onClick = { menuOpen = false; onBackToLauncher() },
+                        )
                     }
-                },
-                label = { Text("Reader") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = NeonCyan.copy(alpha = 0.25f),
-                    selectedLabelColor = NeonCyan,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-            Spacer(Modifier.width(4.dp))
-            if (onBackToLauncher != null) {
+                }
+            }
+        }
+
+        // Find-in-page bar (regular-browser feature).
+        if (showFind) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = findQuery,
+                    onValueChange = { findQuery = it; runFind(it) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text("Find in page") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        activeId?.let { webViews[it]?.findNext(true) }
+                    }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonCyan,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                        cursorColor = NeonMagenta,
+                        focusedLabelColor = NeonCyan,
+                    ),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = when {
+                        findMatches > 0 -> "$findOrdinal/$findMatches"
+                        findQuery.isBlank() -> ""
+                        else -> "0/0"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                NavButton("▲", enabled = findMatches > 0) {
+                    activeId?.let { webViews[it]?.findNext(false) }
+                }
+                NavButton("▼", enabled = findMatches > 0) {
+                    activeId?.let { webViews[it]?.findNext(true) }
+                }
                 TextButton(
-                    onClick = onBackToLauncher,
+                    onClick = { closeFind() },
                     colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
-                ) { Text("Home") }
+                ) { Text("Done") }
             }
-            TextButton(
-                onClick = onOpenNetwork,
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
-            ) { Text("Network") }
-            val activeHost = run {
-                val u = activeId?.let { tabStore.get(it)?.url } ?: ""
-                runCatching { URI(u).host?.lowercase() }.getOrNull()
-            }
-            FilterChip(
-                selected = activeHost != null && activeHost in pausedHosts,
-                onClick = {
-                    val h = activeHost ?: return@FilterChip
-                    extStore.setHostPaused(h, h !in pausedHosts)
-                },
-                enabled = activeHost != null,
-                label = { Text(if (activeHost != null && activeHost in pausedHosts) "Exts off" else "Exts on") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = NeonMagenta.copy(alpha = 0.25f),
-                    selectedLabelColor = NeonMagenta,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
-            )
-            Spacer(Modifier.width(4.dp))
-            TextButton(
-                onClick = onOpenExtensions,
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
-            ) { Text("Exts") }
-            TextButton(
-                onClick = onOpenScripts,
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
-            ) { Text("Scripts") }
-            TextButton(
-                onClick = { showUrlTools = true },
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
-            ) { Text("URL") }
-            TextButton(
-                onClick = { showInject = true },
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonMagenta),
-            ) { Text("Inject") }
-            TextButton(
-                onClick = {
-                    val id = activeId
-                    val wv = id?.let { webViews[it] }
-                    if (wv == null) {
-                        Toast.makeText(appContext, "No active page to capture", Toast.LENGTH_SHORT).show()
-                    } else {
-                        val bmp = WebViewCapture.capture(wv)
-                        if (bmp == null) {
-                            Toast.makeText(appContext, "Capture failed", Toast.LENGTH_SHORT).show()
-                        } else {
-                            val store = EvidenceStore.get(appContext)
-                            val case = store.ensureActiveCase()
-                            val host = hostOf(tabStore.get(id)?.url ?: wv.url.orEmpty()).orEmpty()
-                            store.addScreenshot(case.id, bmp, host = host, title = host.ifEmpty { "screenshot" })
-                            Toast.makeText(appContext, "Saved to evidence: " + case.name, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
-            ) { Text("Shot") }
         }
 
         val activeProgress = activeId?.let { progressMap[it] } ?: 0
@@ -579,6 +724,18 @@ fun TabbedBrowserScreen(
             onDismiss = { showSwitcher = false },
             onOpenCurrent = { openPanelInTab(it, newTab = false) },
             onOpenNewTab = { openPanelInTab(it, newTab = true) },
+        )
+    }
+
+    if (showBookmarks) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        BookmarksSheet(
+            bookmarks = bookmarks,
+            sheetState = sheetState,
+            onDismiss = { showBookmarks = false },
+            onOpen = { bm -> showBookmarks = false; doOpenUrl(bm.url, newTab = false) },
+            onOpenNewTab = { bm -> showBookmarks = false; doOpenUrl(bm.url, newTab = true) },
+            onRemove = { bm -> bookmarkStore.remove(bm.url) },
         )
     }
 
@@ -792,6 +949,71 @@ private fun FleetPanelSwitcherSheet(
                         }
                         TextButton(onClick = { onOpenNewTab(panel) }) {
                             Text("New tab", color = NeonCyan)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookmarksSheet(
+    bookmarks: List<Bookmark>,
+    sheetState: androidx.compose.material3.SheetState,
+    onDismiss: () -> Unit,
+    onOpen: (Bookmark) -> Unit,
+    onOpenNewTab: (Bookmark) -> Unit,
+    onRemove: (Bookmark) -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Text(
+                "Bookmarks",
+                style = MaterialTheme.typography.titleMedium,
+                color = NeonMagenta,
+            )
+            Spacer(Modifier.height(8.dp))
+            if (bookmarks.isEmpty()) {
+                Text(
+                    "No bookmarks yet. Tap the ☆ in the toolbar to save the current page.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Column {
+                bookmarks.forEach { bm ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(
+                            Modifier
+                                .weight(1f)
+                                .clickable { onOpen(bm) },
+                        ) {
+                            Text(
+                                bm.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                bm.url,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        TextButton(onClick = { onOpenNewTab(bm) }) {
+                            Text("New tab", color = NeonCyan)
+                        }
+                        TextButton(onClick = { onRemove(bm) }) {
+                            Text("Remove", color = NeonMagenta)
                         }
                     }
                 }
