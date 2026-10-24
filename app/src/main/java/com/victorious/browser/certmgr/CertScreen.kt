@@ -150,7 +150,11 @@ fun CertScreen(
                 Text(
                     "Generates a brand-new local root. WARNING: this INVALIDATES any CA " +
                         "you previously exported or installed, and takes effect on the next " +
-                        "proxy start. You will need to re-export and re-install.",
+                        "proxy start. It also breaks HTTPS interception in THIS browser: " +
+                        "network_security_config trusts only the original baked-in root, " +
+                        "which can't be swapped at runtime, so every HTTPS page will fail " +
+                        "to load through the proxy until you install the new root yourself " +
+                        "or tap \"Revert to baked\".",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -186,7 +190,9 @@ fun CertScreen(
                 Text(
                     "This creates a new root key + cert. Any previously exported or " +
                         "installed CA will stop working and must be re-exported/installed. " +
-                        "Continue?",
+                        "This browser's OWN HTTPS interception will also stop working — " +
+                        "its trust config is pinned to the original baked-in root — until " +
+                        "you install the new root or revert. Continue?",
                 )
             },
             confirmButton = {
