@@ -511,10 +511,17 @@ class BridgeDispatcher(private val context: Context) {
 
     private fun proxyStatus(req: BridgeRequest): BridgeResponse {
         val running = LocalProxyService.isRunning.value
+        // network_security_config's trust-anchor is a compiled resource (@raw/inspect_root)
+        // pinned to the ORIGINAL baked-in root; it cannot be swapped at runtime. Once the
+        // user regenerates the inspection root (LocalCaProvider.persistRegenerated), the
+        // proxy signs leaf certs with the new root but the WebView still only trusts the
+        // old one, so interception is effectively broken until "Revert to baked". Report
+        // that honestly instead of a hardcoded true the caller would otherwise trust blindly.
+        val caInstalled = !com.victorious.browser.certmgr.LocalCaProvider.hasRegenerated(context)
         val result = JSONObject()
             .put("running", running)
             .put("port", LocalProxyService.port)
-            .put("ca_installed", true)
+            .put("ca_installed", caInstalled)
         return BridgeCodec.ok(req.id, result)
     }
 
