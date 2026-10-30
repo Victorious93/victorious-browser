@@ -180,4 +180,47 @@ class TabStoreTest {
         assertEquals(0, s.count)
         assertNull(s.activeTabId.value)
     }
+
+    @Test
+    fun openTab_incognito_flag_is_stored() {
+        val s = store()
+        val a = s.openTab("https://a.example", incognito = true)
+        assertTrue(s.get(a)!!.incognito)
+        val b = s.openTab("https://b.example")
+        assertFalse(s.get(b)!!.incognito)
+    }
+
+    @Test
+    fun restore_replaces_tabs_and_selects_active() {
+        val s = store()
+        s.openTab("https://old.example")
+        s.restore(
+            listOf(
+                BrowserTab("x", "One", "https://one.example"),
+                BrowserTab("y", "Two", "https://two.example"),
+            ),
+            activeId = "x",
+        )
+        assertEquals(listOf("x", "y"), s.tabs.value.map { it.id })
+        assertEquals("x", s.activeTabId.value)
+    }
+
+    @Test
+    fun restore_unknown_active_selects_last() {
+        val s = store()
+        s.restore(
+            listOf(BrowserTab("a", "", "https://a.example"), BrowserTab("b", "", "https://b.example")),
+            activeId = "missing",
+        )
+        assertEquals("b", s.activeTabId.value)
+    }
+
+    @Test
+    fun restore_empty_clears() {
+        val s = store()
+        s.openTab("https://a.example")
+        s.restore(emptyList(), null)
+        assertEquals(0, s.count)
+        assertNull(s.activeTabId.value)
+    }
 }

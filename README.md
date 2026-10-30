@@ -373,10 +373,24 @@ The browsing surface is a single system **WebView** hosted in Jetpack Compose vi
   the default search engine (DuckDuckGo). See `normalizeUrl` / `looksLikeUrl`.
 - Regular-browser chrome on the tabbed browser: compact nav bar (Back / Forward /
   Reload) with a bookmark **☆** toggle and a **⋮ overflow menu** holding the rest —
-  New tab, Find in page, Share link, Copy link, Bookmarks, the toggles (Reader /
-  Night / Desktop site / per-host Extensions), and the recon tools (Fleet panels,
-  Extensions, User scripts, URL tools, Inject, Screenshot, Network log). Previously
-  every control sat in one non-scrolling row that overflowed and clipped off-screen.
+  New tab, **New private tab**, Find in page, Share link, Copy link, Bookmarks, the
+  toggles (Reader / Night / Desktop site / per-host Extensions), and recon tools
+  (Proxy history, **Send to repeater**, **Cookie jar**, **Web storage**, **Console**,
+  **Clear site data**, Fleet panels, Extensions, User scripts, URL tools, Inject,
+  Screenshot, Network log). Previously every control sat in one non-scrolling row
+  that overflowed and clipped off-screen.
+- **Session restore**: non-private tab URLs/titles persist across process death
+  (JS heap / back-forward list are not). **Private tabs** skip history + restore;
+  they use an isolated WebView Profile named `incognito` when MULTI_PROFILE is
+  available. Tools opened from the browser ⋮ menu keep live WebViews composed
+  underneath so a round-trip does not destroy tab state.
+- **Cookie jar / web storage / console**: live CookieManager inspector (edit /
+  delete / export JSON, JWT decode-not-verify), localStorage + sessionStorage dump
+  for the current origin, WebView `console.*` + main-frame load errors (magenta
+  **JS N** chip when a tab has errors).
+- **HAR export** on Network / History: HAR 1.2 of the filtered capture list with
+  cookies / Authorization / tokens stripped and bodies omitted. The existing JSON
+  export still keeps full local captures.
 - **Bookmarks** (`BookmarkStore`): star the current page; open / open-in-new-tab /
   remove from a bottom sheet. SharedPreferences + JSON, same pattern as the other stores.
 - **Find in page**: a find bar backed by `WebView.findAllAsync` with match count and

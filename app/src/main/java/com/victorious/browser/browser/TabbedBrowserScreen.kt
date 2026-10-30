@@ -101,7 +101,11 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.URLUtil
 import androidx.compose.ui.focus.onFocusChanged
+import com.victorious.browser.inspect.CaptureLookup
+import com.victorious.browser.inspect.CaptureStore
+import com.victorious.browser.inspect.CapturedExchange
 import com.victorious.browser.inspect.LocalProxyService
+import com.victorious.browser.sandbox.SandboxManager
 import java.net.URI
 
 private const val HOME_URL = "https://example.com"
@@ -133,6 +137,7 @@ fun TabbedBrowserScreen(
     onOpenExtensions: () -> Unit = {},
     onBackToLauncher: (() -> Unit)? = null,
     onOpenAntiPhish: (() -> Unit)? = null,
+    onSendToRepeater: (CapturedExchange?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val appContext = context.applicationContext
@@ -200,6 +205,16 @@ fun TabbedBrowserScreen(
     var urlFocused by remember { mutableStateOf(false) }
     // Per-tab TLS certificate as reported by WebView (null for http / not loaded).
     val certs = remember { mutableStateMapOf<String, SslCertificate?>() }
+    val consoleLogs = remember { mutableStateMapOf<String, List<ConsoleEntry>>() }
+    val sessionStore = remember { TabSessionStore.get(appContext) }
+
+    var showCookies by remember { mutableStateOf(false) }
+    var cookieRows by remember { mutableStateOf<List<CookieJarLogic.JarCookie>>(emptyList()) }
+    var showStorage by remember { mutableStateOf(false) }
+    var storageDump by remember { mutableStateOf<StorageInspector.Dump?>(null) }
+    var storageLoading by remember { mutableStateOf(false) }
+    var showConsole by remember { mutableStateOf(false) }
+    var showClearSite by remember { mutableStateOf(false) }
 
     var meshChecking by remember { mutableStateOf(false) }
     var meshBlock by remember { mutableStateOf<MeshOpenDecision.Blocked?>(null) }
@@ -209,6 +224,11 @@ fun TabbedBrowserScreen(
     // Ensure there is always at least one tab while this screen is shown.
     LaunchedEffect(tabs.isEmpty()) {
         if (tabStore.count == 0) tabStore.openTab(HOME_URL)
+    }
+
+    // Persist non-private tabs so a process kill restores URLs (not JS heap / back-forward).
+    LaunchedEffect(tabs, activeId) {
+        sessionStore.save(tabs, activeId)
     }
 
     val activeTab = tabs.firstOrNull { it.id == activeId }
@@ -233,12 +253,47 @@ fun TabbedBrowserScreen(
             .onFailure { Toast.makeText(appContext, "Download failed: ${it.message}", Toast.LENGTH_SHORT).show() }
     }
 
+    fun appendConsole(tabId: String, level: String, message: String, source: String, line: Int) {
+        val next = ConsoleLog.append(
+            consoleLogs[tabId].orEmpty(),
+            ConsoleEntry(level, message, source, line, System.currentTimeMillis()),
+        )
+        consoleLogs[tabId] = next
+    }
+
+    fun refreshCookies() {
+        val url = tabStore.activeTab()?.url?.takeIf { it.isNotBlank() } ?: urlBarText
+        cookieRows = BrowserRecon.cookiesForUrl(activeId?.let { webViews[it] }, url)
+    }
+
+    fun refreshStorage() {
+        val wv = activeId?.let { webViews[it] }
+        if (wv == null) {
+            storageDump = StorageInspector.Dump("", emptyList(), emptyList(), error = "No active page")
+            return
+        }
+        storageLoading = true
+        wv.evaluateJavascript(StorageInspector.dumpScript()) { raw ->
+            storageDump = StorageInspector.parseDump(raw)
+            storageLoading = false
+        }
+    }
+
+    fun evalStorage(script: String, thenRefresh: Boolean = true) {
+        val wv = activeId?.let { webViews[it] } ?: return
+        wv.evaluateJavascript(script) {
+            if (thenRefresh) refreshStorage()
+        }
+    }
+
     fun buildWebView(tabId: String, initialUrl: String): WebView =
         WebView(appContext).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
+            val privateTab = tabStore.get(tabId)?.incognito == true
+            if (privateTab) SandboxManager.applyToNewWebView(this, INCOGNITO_PROFILE)
             applyVictoriousWebSettings(this, desktopUa)
             applyNightMode(this, nightMode)
             // Document-start user scripts, per tab (same as BrowserScreen). The
@@ -260,8 +315,13 @@ fun TabbedBrowserScreen(
                     if (!loading) {
                         certs[tabId] = certificate
                         val u = url.orEmpty()
-                        if (!readerTabs.isActive(tabId)) historyStore.record(u, title.orEmpty())
+                        val skipHistory = readerTabs.isActive(tabId) ||
+                            tabStore.get(tabId)?.incognito == true
+                        if (!skipHistory) historyStore.record(u, title.orEmpty())
                     }
+                },
+                onPageError = { errUrl, desc, code ->
+                    appendConsole(tabId, "ERROR", "Page error $code: $desc", errUrl, 0)
                 },
             )
             webChromeClient = VictoriousWebChromeClient(
@@ -271,9 +331,14 @@ fun TabbedBrowserScreen(
                 },
                 onTitleChanged = { t ->
                     tabStore.updateTitle(tabId, t)
-                    url?.let { historyStore.retitle(it, t) }
+                    if (tabStore.get(tabId)?.incognito != true) {
+                        url?.let { historyStore.retitle(it, t) }
+                    }
                 },
                 onIconChanged = { icon -> favicons[tabId] = icon },
+                onConsoleMessage = { level, message, source, line ->
+                    appendConsole(tabId, level, message, source, line)
+                },
             )
             setDownloadListener { dUrl, ua, disposition, mime, _ ->
                 startDownloadImpl(dUrl, ua, disposition, mime)
@@ -306,8 +371,14 @@ fun TabbedBrowserScreen(
             wv.destroy()
         }
         favicons.remove(id); progressMap.remove(id); loadingMap.remove(id); certs.remove(id)
+        consoleLogs.remove(id)
         if (readerTabs.remove(id)) readerVersion++
+        val wasPrivate = tabStore.get(id)?.incognito == true
         tabStore.closeTab(id)
+        if (wasPrivate && tabStore.tabs.value.none { it.incognito }) {
+            // Last private tab gone — drop the isolated profile (cookies/storage) when supported.
+            SandboxManager.delete(INCOGNITO_PROFILE)
+        }
     }
 
     fun navigateTo(raw: String) {
@@ -318,15 +389,28 @@ fun TabbedBrowserScreen(
         focusManager.clearFocus()
     }
 
-    fun doOpenUrl(url: String, newTab: Boolean) {
+    fun doOpenUrl(url: String, newTab: Boolean, incognito: Boolean = activeTab?.incognito == true) {
         val target = normalizeUrl(url, searchEngine.queryPrefix)
         if (newTab || tabStore.count == 0 || activeId == null) {
-            tabStore.openTab(target)
+            tabStore.openTab(target, incognito = incognito)
         } else {
             val id = activeId!!
             tabStore.updateUrl(id, target)
             webViews[id]?.loadUrl(target)
         }
+    }
+
+    fun sendCurrentToRepeater() {
+        val page = tabStore.activeTab()?.url?.takeIf { it.isNotBlank() } ?: urlBarText
+        val seed = CaptureLookup.latestForPage(CaptureStore.exchanges.value, page)
+        if (seed == null) {
+            Toast.makeText(
+                appContext,
+                "No captured request for this origin. Enable PROXY, reload, then retry — or open an empty editor.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        onSendToRepeater(seed)
     }
 
     fun openPanelInTab(panel: Panel, newTab: Boolean) {
@@ -360,10 +444,10 @@ fun TabbedBrowserScreen(
             .onFailure { Toast.makeText(appContext, "No app available to share", Toast.LENGTH_SHORT).show() }
     }
 
-    fun copyText(text: String) {
+    fun copyText(text: String, toast: String = "Copied") {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        cm?.setPrimaryClip(ClipData.newPlainText("url", text))
-        Toast.makeText(appContext, "Link copied", Toast.LENGTH_SHORT).show()
+        cm?.setPrimaryClip(ClipData.newPlainText("recon", text))
+        Toast.makeText(appContext, toast, Toast.LENGTH_SHORT).show()
     }
 
     fun currentUrl(): String = activeTab?.url?.takeIf { it.isNotBlank() } ?: urlBarText
@@ -380,7 +464,7 @@ fun TabbedBrowserScreen(
     fun copyUrl() {
         val url = currentUrl()
         if (url.isBlank()) return
-        copyText(url)
+        copyText(url, "Link copied")
     }
 
     fun toggleReader() {
@@ -601,6 +685,13 @@ fun TabbedBrowserScreen(
                     if (cert != null) showCertInfo = true
                 }
             }
+            val jsErrors = activeId?.let { ConsoleLog.errorCount(consoleLogs[it].orEmpty()) } ?: 0
+            if (jsErrors > 0) {
+                ReconChip("JS $jsErrors", NeonMagenta) { showConsole = true }
+            }
+            if (activeTab?.incognito == true) {
+                ReconChip("PRIVATE", NeonMagenta) { }
+            }
             Spacer(Modifier.weight(1f))
 
             val bmUrl = activeTab?.url ?: ""
@@ -641,6 +732,7 @@ fun TabbedBrowserScreen(
                     }
                     if (!menuRecon) {
                         item("New tab") { tabStore.openTab(HOME_URL) }
+                        item("New private tab") { tabStore.openTab(HOME_URL, incognito = true) }
                         item("Tabs (${tabs.size})…") { showTabSwitcher = true }
                         HorizontalDivider()
                         item("History") { showHistory = true }
@@ -661,6 +753,11 @@ fun TabbedBrowserScreen(
                         item("◂ Back", keepOpen = true) { menuRecon = false }
                         HorizontalDivider()
                         item(if (proxyOn) "Proxy history (proxy on)" else "Proxy history") { onOpenNetwork() }
+                        item("Send to repeater") { sendCurrentToRepeater() }
+                        item("Cookie jar") { refreshCookies(); showCookies = true }
+                        item("Web storage") { showStorage = true; refreshStorage() }
+                        item("Console") { showConsole = true }
+                        item("Clear site data…", enabled = SiteData.originOf(currentUrl()) != null) { showClearSite = true }
                         if (onOpenAntiPhish != null) item("Anti-Phish") { onOpenAntiPhish() }
                         item("Inject JS / HTML") { showInject = true }
                         item("URL tools") { showUrlTools = true }
@@ -865,6 +962,7 @@ fun TabbedBrowserScreen(
             onSelect = { tabStore.activate(it); showTabSwitcher = false },
             onClose = { destroyTab(it) },
             onNewTab = { tabStore.openTab(HOME_URL); showTabSwitcher = false },
+            onNewPrivate = { tabStore.openTab(HOME_URL, incognito = true); showTabSwitcher = false },
             onCloseOthers = {
                 val keep = activeId
                 tabs.map { it.id }.filter { it != keep }.forEach { destroyTab(it) }
@@ -892,7 +990,7 @@ fun TabbedBrowserScreen(
             onOpen = { doOpenUrl(url, newTab = false) },
             onOpenNewTab = { doOpenUrl(url, newTab = true) },
             onOpenBackground = {
-                tabStore.openTab(url, activate = false)
+                tabStore.openTab(url, activate = false, incognito = activeTab?.incognito == true)
                 Toast.makeText(appContext, "Opened in background tab", Toast.LENGTH_SHORT).show()
             },
             onCopy = { copyText(url) },
@@ -903,6 +1001,81 @@ fun TabbedBrowserScreen(
             },
             onDownload = {
                 startDownloadImpl(url, activeId?.let { webViews[it]?.settings?.userAgentString }, null, null)
+            },
+        )
+    }
+
+    if (showCookies) {
+        CookieJarSheet(
+            url = currentUrl(),
+            cookies = cookieRows,
+            onDismiss = { showCookies = false },
+            onRefresh = { refreshCookies() },
+            onSave = { name, value ->
+                runCatching {
+                    BrowserRecon.setCookie(activeId?.let { webViews[it] }, currentUrl(), name, value)
+                }.onFailure {
+                    Toast.makeText(appContext, "Cookie not set: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+                refreshCookies()
+            },
+            onDelete = { name ->
+                BrowserRecon.deleteCookie(activeId?.let { webViews[it] }, currentUrl(), name)
+                refreshCookies()
+            },
+            onExport = {
+                val json = CookieJarLogic.exportJson(currentUrl(), cookieRows, System.currentTimeMillis())
+                copyText(json, "Cookie jar JSON copied")
+            },
+        )
+    }
+
+    if (showStorage) {
+        StorageInspectorSheet(
+            dump = storageDump,
+            loading = storageLoading,
+            onDismiss = { showStorage = false },
+            onRefresh = { refreshStorage() },
+            onSet = { store, key, value -> evalStorage(StorageInspector.setScript(store, key, value)) },
+            onDelete = { store, key -> evalStorage(StorageInspector.removeScript(store, key)) },
+            onClear = { store -> evalStorage(StorageInspector.clearScript(store)) },
+            onExport = {
+                val dump = storageDump
+                if (dump == null) {
+                    Toast.makeText(appContext, "Nothing to export yet", Toast.LENGTH_SHORT).show()
+                } else {
+                    copyText(StorageInspector.exportJson(dump, System.currentTimeMillis()), "Storage JSON copied")
+                }
+            },
+        )
+    }
+
+    if (showConsole) {
+        val id = activeId
+        ConsoleSheet(
+            entries = id?.let { consoleLogs[it] }.orEmpty(),
+            onDismiss = { showConsole = false },
+            onClear = { if (id != null) consoleLogs[id] = emptyList() },
+            onCopy = {
+                val text = id?.let { consoleLogs[it] }.orEmpty().joinToString("\n") { ConsoleLog.format(it) }
+                copyText(text.ifBlank { "(empty)" }, "Console copied")
+            },
+        )
+    }
+
+    if (showClearSite) {
+        val origin = SiteData.originOf(currentUrl())
+        ClearSiteDataDialog(
+            origin = origin,
+            onDismiss = { showClearSite = false },
+            onConfirm = {
+                val wv = activeId?.let { webViews[it] }
+                val url = currentUrl()
+                BrowserRecon.clearCookiesForUrl(wv, url)
+                origin?.let { BrowserRecon.clearOriginStorage(wv, it) }
+                wv?.evaluateJavascript(SiteData.clearStorageScript()) { }
+                showClearSite = false
+                Toast.makeText(appContext, "Cleared site data for ${origin ?: url}", Toast.LENGTH_SHORT).show()
             },
         )
     }
@@ -1092,6 +1265,10 @@ private fun TabChip(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 120.dp),
         )
+        if (tab.incognito) {
+            Spacer(Modifier.width(4.dp))
+            Text("P", style = MaterialTheme.typography.labelSmall, color = NeonMagenta)
+        }
         Spacer(Modifier.width(4.dp))
         Text(
             "✕",

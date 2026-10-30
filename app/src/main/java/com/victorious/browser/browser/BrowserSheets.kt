@@ -85,6 +85,7 @@ internal fun TabSwitcherSheet(
     onSelect: (String) -> Unit,
     onClose: (String) -> Unit,
     onNewTab: () -> Unit,
+    onNewPrivate: () -> Unit = {},
     onCloseOthers: () -> Unit,
     onCloseAll: () -> Unit,
 ) {
@@ -95,6 +96,7 @@ internal fun TabSwitcherSheet(
                 SheetTitle("Tabs (${tabs.size})")
                 Spacer(Modifier.weight(1f))
                 TextButton(onClick = onNewTab) { Text("＋ New tab", color = NeonCyan) }
+                TextButton(onClick = onNewPrivate) { Text("Private", color = NeonMagenta) }
             }
             Row {
                 TextButton(onClick = onCloseOthers, enabled = tabs.size > 1) { Text("Close others", color = NeonMagenta) }
@@ -129,6 +131,9 @@ internal fun TabSwitcherSheet(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
+                            if (tab.incognito) {
+                                Text("P", color = NeonMagenta, style = MaterialTheme.typography.labelSmall)
+                            }
                             Text(
                                 "✕",
                                 color = NeonMagenta,

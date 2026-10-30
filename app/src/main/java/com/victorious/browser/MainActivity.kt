@@ -4,9 +4,12 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,13 +18,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import com.victorious.browser.bridge.BridgeCommandBus
 import com.victorious.browser.bridge.BridgeDispatcher
 import com.victorious.browser.bridge.FleetControlScreen
 import com.victorious.browser.browser.BrowserScreen
+import com.victorious.browser.browser.TabSessionStore
 import com.victorious.browser.browser.TabStore
 import com.victorious.browser.browser.TabbedBrowserScreen
+import com.victorious.browser.inspect.CapturedExchange
 import com.victorious.browser.headscale.HeadscaleScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.help.HelpScreen
@@ -109,13 +115,20 @@ fun VictoriousBrowserApp(
     pendingOpenUrl: String? = null,
     onPendingConsumed: () -> Unit = {},
 ) {
+    val context = LocalContext.current
     var destination by remember { mutableStateOf<AppDestination>(AppDestination.Launcher) }
-    val tabStore = remember { TabStore() }
+    val tabStore = remember {
+        TabStore().also { TabSessionStore.get(context).restoreInto(it) }
+    }
     // Tools opened from the browser's ⋮ menu return to the browser, not the launcher.
     var returnToBrowser by remember { mutableStateOf(false) }
+    var replaySeed by remember { mutableStateOf<CapturedExchange?>(null) }
+    var startRepeater by remember { mutableStateOf(false) }
     fun backFromTool() {
         destination = if (returnToBrowser) AppDestination.Browser else AppDestination.Launcher
         returnToBrowser = false
+        replaySeed = null
+        startRepeater = false
     }
 
     fun openUrl(url: String) {
@@ -146,7 +159,31 @@ fun VictoriousBrowserApp(
         val pad = Modifier
             .fillMaxSize()
             .padding(innerPadding)
-        when (val dest = destination) {
+        val dest = destination
+        val keepBrowser =
+            dest == AppDestination.Browser || (returnToBrowser && dest != AppDestination.Launcher)
+        Box(Modifier.fillMaxSize()) {
+        if (keepBrowser) {
+            TabbedBrowserScreen(
+                tabStore = tabStore,
+                modifier = pad,
+                onOpenNetwork = { returnToBrowser = true; destination = AppDestination.Network },
+                onOpenScripts = { returnToBrowser = true; destination = AppDestination.Scripts },
+                onOpenExtensions = { returnToBrowser = true; destination = AppDestination.Extensions },
+                onBackToLauncher = { destination = AppDestination.Launcher },
+                onOpenAntiPhish = { returnToBrowser = true; destination = AppDestination.AntiPhish },
+                onSendToRepeater = { seed ->
+                    replaySeed = seed
+                    startRepeater = true
+                    returnToBrowser = true
+                    destination = AppDestination.Network
+                },
+            )
+        }
+        if (dest != AppDestination.Browser) {
+        Surface(modifier = pad, color = MaterialTheme.colorScheme.background) {
+        when (dest) {
+            AppDestination.Browser -> { /* kept alive under overlay when returning to tools */ }
             AppDestination.Launcher -> FleetPanelScreen(
                 modifier = pad,
                 onOpenPanel = { panel -> openUrl(panel.url) },
@@ -179,19 +216,12 @@ fun VictoriousBrowserApp(
                 onOpenOsint = { destination = AppDestination.Osint },
                 onOpenScanner = { destination = AppDestination.Scanner },
             )
-            AppDestination.Browser -> TabbedBrowserScreen(
-                tabStore = tabStore,
-                modifier = pad,
-                onOpenNetwork = { returnToBrowser = true; destination = AppDestination.Network },
-                onOpenScripts = { destination = AppDestination.Scripts },
-                onOpenExtensions = { returnToBrowser = true; destination = AppDestination.Extensions },
-                onBackToLauncher = { destination = AppDestination.Launcher },
-                onOpenAntiPhish = { returnToBrowser = true; destination = AppDestination.AntiPhish },
-            )
             AppDestination.Network -> NetworkHistoryScreen(
                 modifier = pad,
                 onBack = { backFromTool() },
                 onSendToFleet = { destination = AppDestination.Export },
+                initialReplay = replaySeed,
+                startInRepeater = startRepeater,
             )
             AppDestination.FleetControl -> FleetControlScreen(
                 modifier = pad,
@@ -253,7 +283,7 @@ fun VictoriousBrowserApp(
             )
             AppDestination.Scripts -> UserScriptsScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Browser },
+                onBack = { backFromTool() },
             )
             is AppDestination.SandboxBrowser -> BrowserScreen(
                 modifier = pad,
@@ -279,6 +309,9 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 onBack = { destination = AppDestination.Launcher },
             )
+        }
+        }
+        }
         }
     }
 }
