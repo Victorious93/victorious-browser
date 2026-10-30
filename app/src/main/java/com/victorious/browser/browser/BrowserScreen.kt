@@ -413,7 +413,7 @@ private fun NavButton(label: String, enabled: Boolean, onClick: () -> Unit) {
  *   - looks like a host/URL (a dotted host, `localhost`, or an explicit `host:port`) → prepend `https://`
  *   - anything else (spaces, or a single bare word with no dot) → web search via [SEARCH_URL]
  */
-internal fun normalizeUrl(raw: String): String {
+internal fun normalizeUrl(raw: String, searchPrefix: String = SEARCH_URL): String {
     val trimmed = raw.trim()
     if (trimmed.isEmpty()) return HOME_URL
     // Hierarchical URL with an explicit scheme, e.g. https://… , or a known opaque
@@ -424,7 +424,7 @@ internal fun normalizeUrl(raw: String): String {
     val lower = trimmed.lowercase()
     if (OPAQUE_SCHEMES.any { lower.startsWith(it) }) return trimmed
     if (looksLikeUrl(trimmed)) return "https://$trimmed"
-    return SEARCH_URL + java.net.URLEncoder.encode(trimmed, "UTF-8")
+    return searchPrefix + java.net.URLEncoder.encode(trimmed, "UTF-8")
 }
 
 private val OPAQUE_SCHEMES = listOf(
