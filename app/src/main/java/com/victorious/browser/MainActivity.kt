@@ -111,6 +111,12 @@ fun VictoriousBrowserApp(
 ) {
     var destination by remember { mutableStateOf<AppDestination>(AppDestination.Launcher) }
     val tabStore = remember { TabStore() }
+    // Tools opened from the browser's ⋮ menu return to the browser, not the launcher.
+    var returnToBrowser by remember { mutableStateOf(false) }
+    fun backFromTool() {
+        destination = if (returnToBrowser) AppDestination.Browser else AppDestination.Launcher
+        returnToBrowser = false
+    }
 
     fun openUrl(url: String) {
         tabStore.openTab(url)
@@ -176,15 +182,15 @@ fun VictoriousBrowserApp(
             AppDestination.Browser -> TabbedBrowserScreen(
                 tabStore = tabStore,
                 modifier = pad,
-                onOpenNetwork = { destination = AppDestination.Network },
+                onOpenNetwork = { returnToBrowser = true; destination = AppDestination.Network },
                 onOpenScripts = { destination = AppDestination.Scripts },
-                onOpenExtensions = { destination = AppDestination.Extensions },
+                onOpenExtensions = { returnToBrowser = true; destination = AppDestination.Extensions },
                 onBackToLauncher = { destination = AppDestination.Launcher },
-                onOpenAntiPhish = { destination = AppDestination.AntiPhish },
+                onOpenAntiPhish = { returnToBrowser = true; destination = AppDestination.AntiPhish },
             )
             AppDestination.Network -> NetworkHistoryScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
                 onSendToFleet = { destination = AppDestination.Export },
             )
             AppDestination.FleetControl -> FleetControlScreen(
@@ -235,7 +241,7 @@ fun VictoriousBrowserApp(
             )
             AppDestination.AntiPhish -> AntiPhishScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Help -> HelpScreen(
                 modifier = pad,
@@ -243,7 +249,7 @@ fun VictoriousBrowserApp(
             )
             AppDestination.Extensions -> ExtensionsScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Scripts -> UserScriptsScreen(
                 modifier = pad,

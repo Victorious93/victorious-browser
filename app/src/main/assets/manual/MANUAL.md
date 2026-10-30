@@ -32,14 +32,33 @@ Use it **only against systems you own or are explicitly authorized to test.**
 **What it does.** A tabbed browsing shell built on the system WebView (no bundled
 Chromium). Each tab keeps its own live WebView across switches.
 
-**How to use.** Address bar + Go, Back, Forward, Reload and a progress indicator.
-Use the tab bar to create, close and switch tabs, plus a bottom-sheet palette to
-jump to any configured fleet panel in the current or a new tab. Extras in the
-browser chrome: Desktop / Mobile UA toggle, a **Night** chip (algorithmic
-darkening), **Reader** mode (Readability.js, sanitized), **Extensions** (userscript engine) / **Scripts** (per-site
-user JavaScript), **URL** tools (encode/decode, query view, link shortener, URL
-changer, URLhaus/VirusTotal scan with your own keys), and **Inject** (one-off JS
-or raw HTML into the current page).
+**How to use.** Type in the address bar: anything that looks like a URL is opened,
+anything else is searched with your chosen **search engine** (DuckDuckGo by default;
+change it under ⋮ → Search engine). While typing, suggestions come from open tabs,
+bookmarks and history (picking an open tab switches to it). Go, Back, Forward and
+Reload (which becomes **Stop** while a page loads). The tab strip switches/closes
+tabs; the **tab-count** square opens the tab switcher (grid with favicon, title and
+URL; New tab, Close others, Close all). Long-press a link for Open, New tab,
+Background tab, Copy, Share, Bookmark and Download.
+
+The **⋮ menu** holds New tab, Tabs, History, Bookmarks, Downloads, Find in page
+(next/previous match), Share/Copy link, Desktop site, Reader, Night and Search
+engine. **Recon tools ▸** opens a second page: Proxy history, Anti-Phish, Inject
+(one-off JS or raw HTML), URL tools (encode/decode, query view, shortener, URLhaus /
+VirusTotal with your own keys), Screenshot → evidence, Certificate info, per-site
+Extensions toggle, Extensions, User scripts and Fleet panels. History (max 500
+entries) and bookmarks are stored on the device and can be searched and deleted.
+Downloads go through Android's DownloadManager and are listed under Downloads.
+
+**Recon chips.** **PROXY** appears while the intercepting proxy runs (tap it for
+history). The transport chip shows **HTTP · plain** for unencrypted pages or
+**TLS · issuer** with the certificate WebView reported (tap it for details). With
+the proxy on, that is the proxy's inspection certificate, not the origin's. There
+is deliberately no lock icon: the chip reports what was seen, not a verdict.
+
+**Limitations.** Downloads are fetched by DownloadManager directly and do not
+pass through the proxy. blob: and data: downloads are not supported. Tabs are not
+restored after the app process is killed.
 
 **Safety.** The Inject tool deliberately does not sanitize HTML — it is for
 testing how your own pages handle untrusted markup. User scripts are scoped to

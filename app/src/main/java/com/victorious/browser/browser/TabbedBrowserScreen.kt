@@ -96,6 +96,12 @@ import com.victorious.browser.ui.theme.NeonMagenta
 import com.victorious.browser.antiphish.AntiPhishController
 import com.victorious.browser.antiphish.AntiPhishWarningBanner
 import kotlinx.coroutines.launch
+import android.net.http.SslCertificate
+import android.os.Handler
+import android.os.Looper
+import android.webkit.URLUtil
+import androidx.compose.ui.focus.onFocusChanged
+import com.victorious.browser.inspect.LocalProxyService
 import java.net.URI
 
 private const val HOME_URL = "https://example.com"
@@ -176,13 +182,32 @@ fun TabbedBrowserScreen(
     var findOrdinal by remember { mutableStateOf(0) }
 
     // Mesh gating (same contract as FleetPanelScreen).
+    // History, downloads, search engine, long-press menu, recon chrome.
+    val historyStore = remember { HistoryStore.get(appContext) }
+    val history by historyStore.entries.collectAsState()
+    val downloadStore = remember { DownloadStore.get(appContext) }
+    val downloads by downloadStore.records.collectAsState()
+    val browserPrefs = remember { BrowserPrefs.get(appContext) }
+    val searchEngine by browserPrefs.searchEngine.collectAsState()
+    val proxyOn by LocalProxyService.isRunning.collectAsState()
+    var showHistory by remember { mutableStateOf(false) }
+    var showDownloads by remember { mutableStateOf(false) }
+    var showTabSwitcher by remember { mutableStateOf(false) }
+    var showEngineDialog by remember { mutableStateOf(false) }
+    var showCertInfo by remember { mutableStateOf(false) }
+    var menuRecon by remember { mutableStateOf(false) }
+    var linkMenu by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var urlFocused by remember { mutableStateOf(false) }
+    // Per-tab TLS certificate as reported by WebView (null for http / not loaded).
+    val certs = remember { mutableStateMapOf<String, SslCertificate?>() }
+
     var meshChecking by remember { mutableStateOf(false) }
     var meshBlock by remember { mutableStateOf<MeshOpenDecision.Blocked?>(null) }
     var pendingMeshPanel by remember { mutableStateOf<Panel?>(null) }
     var pendingMeshNewTab by remember { mutableStateOf(true) }
 
     // Ensure there is always at least one tab while this screen is shown.
-    LaunchedEffect(Unit) {
+    LaunchedEffect(tabs.isEmpty()) {
         if (tabStore.count == 0) tabStore.openTab(HOME_URL)
     }
 
@@ -191,7 +216,21 @@ fun TabbedBrowserScreen(
     // Keep the URL bar in sync with the active tab (follows navigation, like the
     // single-tab screen did).
     LaunchedEffect(activeId, activeTab?.url) {
+        if (!urlFocused) urlBarText = activeTab?.url ?: ""
+    }
+    LaunchedEffect(activeId) {
+        // Switching tabs always shows the new tab's URL.
         urlBarText = activeTab?.url ?: ""
+    }
+
+    fun startDownloadImpl(url: String, ua: String?, disposition: String?, mime: String?) {
+        if (!URLUtil.isNetworkUrl(url)) {
+            Toast.makeText(appContext, "Can't download this link type (only http/https)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        runCatching { downloadStore.enqueue(url, ua, disposition, mime) }
+            .onSuccess { Toast.makeText(appContext, "Downloading $it", Toast.LENGTH_SHORT).show() }
+            .onFailure { Toast.makeText(appContext, "Download failed: ${it.message}", Toast.LENGTH_SHORT).show() }
     }
 
     fun buildWebView(tabId: String, initialUrl: String): WebView =
@@ -218,6 +257,11 @@ fun TabbedBrowserScreen(
                 onLoadingChanged = { loading ->
                     loadingMap[tabId] = loading
                     tabStore.updateNav(tabId, canGoBack(), canGoForward())
+                    if (!loading) {
+                        certs[tabId] = certificate
+                        val u = url.orEmpty()
+                        if (!readerTabs.isActive(tabId)) historyStore.record(u, title.orEmpty())
+                    }
                 },
             )
             webChromeClient = VictoriousWebChromeClient(
@@ -225,22 +269,57 @@ fun TabbedBrowserScreen(
                     progressMap[tabId] = p
                     if (p >= 100) loadingMap[tabId] = false
                 },
-                onTitleChanged = { title -> tabStore.updateTitle(tabId, title) },
+                onTitleChanged = { t ->
+                    tabStore.updateTitle(tabId, t)
+                    url?.let { historyStore.retitle(it, t) }
+                },
                 onIconChanged = { icon -> favicons[tabId] = icon },
             )
+            setDownloadListener { dUrl, ua, disposition, mime, _ ->
+                startDownloadImpl(dUrl, ua, disposition, mime)
+            }
+            setOnLongClickListener { v ->
+                val wv = v as WebView
+                val hit = wv.hitTestResult
+                when (hit.type) {
+                    WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                        hit.extra?.let { linkMenu = it to false }
+                        hit.extra != null
+                    }
+                    WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                        // hit.extra is the IMAGE src; ask WebView for the enclosing href.
+                        val msg = Handler(Looper.getMainLooper()).obtainMessage()
+                        wv.requestFocusNodeHref(msg)
+                        val href = msg.data.getString("url")?.takeIf { it.isNotBlank() }
+                        (href ?: hit.extra)?.let { linkMenu = it to (href == null) }
+                        true
+                    }
+                    else -> false // let WebView handle text selection etc.
+                }
+            }
             loadUrl(initialUrl)
         }
 
+    fun destroyTab(id: String) {
+        webViews.remove(id)?.let { wv ->
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            wv.destroy()
+        }
+        favicons.remove(id); progressMap.remove(id); loadingMap.remove(id); certs.remove(id)
+        if (readerTabs.remove(id)) readerVersion++
+        tabStore.closeTab(id)
+    }
+
     fun navigateTo(raw: String) {
         val id = activeId ?: return
-        val target = normalizeUrl(raw)
+        val target = normalizeUrl(raw, searchEngine.queryPrefix)
         urlBarText = target
         webViews[id]?.loadUrl(target)
         focusManager.clearFocus()
     }
 
     fun doOpenUrl(url: String, newTab: Boolean) {
-        val target = normalizeUrl(url)
+        val target = normalizeUrl(url, searchEngine.queryPrefix)
         if (newTab || tabStore.count == 0 || activeId == null) {
             tabStore.openTab(target)
         } else {
@@ -271,6 +350,22 @@ fun TabbedBrowserScreen(
         }
     }
 
+
+    fun shareText(text: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        runCatching { context.startActivity(Intent.createChooser(send, "Share link")) }
+            .onFailure { Toast.makeText(appContext, "No app available to share", Toast.LENGTH_SHORT).show() }
+    }
+
+    fun copyText(text: String) {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        cm?.setPrimaryClip(ClipData.newPlainText("url", text))
+        Toast.makeText(appContext, "Link copied", Toast.LENGTH_SHORT).show()
+    }
+
     fun currentUrl(): String = activeTab?.url?.takeIf { it.isNotBlank() } ?: urlBarText
 
     fun shareUrl() {
@@ -279,20 +374,13 @@ fun TabbedBrowserScreen(
             Toast.makeText(appContext, "No URL to share", Toast.LENGTH_SHORT).show()
             return
         }
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, url)
-        }
-        runCatching { context.startActivity(Intent.createChooser(send, "Share link")) }
-            .onFailure { Toast.makeText(appContext, "No app available to share", Toast.LENGTH_SHORT).show() }
+        shareText(url)
     }
 
     fun copyUrl() {
         val url = currentUrl()
         if (url.isBlank()) return
-        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        cm?.setPrimaryClip(ClipData.newPlainText("url", url))
-        Toast.makeText(appContext, "Link copied", Toast.LENGTH_SHORT).show()
+        copyText(url)
     }
 
     fun toggleReader() {
@@ -370,13 +458,26 @@ fun TabbedBrowserScreen(
         }
     }
 
-    BackHandler(enabled = (activeTab?.canGoBack == true) || onBackToLauncher != null) {
+    // Back priority: close find bar → dismiss address-bar editing → page back → launcher.
+    BackHandler(enabled = showFind || urlFocused || (activeTab?.canGoBack == true) || onBackToLauncher != null) {
         val id = activeId
-        if (id != null && webViews[id]?.canGoBack() == true) {
-            webViews[id]?.goBack()
-        } else {
-            onBackToLauncher?.invoke()
+        when {
+            showFind -> closeFind()
+            urlFocused -> focusManager.clearFocus()
+            id != null && webViews[id]?.canGoBack() == true -> webViews[id]?.goBack()
+            else -> onBackToLauncher?.invoke()
         }
+    }
+
+    fun applyDesktop(on: Boolean) {
+        desktopUa = on
+        val netId = NetIdSettings.get(appContext)
+        webViews.values.forEach {
+            applyVictoriousWebSettings(it, on)
+            // Bug fix: re-applying settings used to drop an active Net ID UA spoof.
+            SpoofInjector.applyUserAgent(it, netId.fingerprint.value)
+        }
+        activeId?.let { webViews[it]?.reload() }
     }
 
     Column(
@@ -384,25 +485,18 @@ fun TabbedBrowserScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // Tab bar
+        // Tab strip (quick switch) + tab-count button that opens the full switcher.
         TabBar(
             tabs = tabs,
             activeId = activeId,
             favicons = favicons,
             onSelect = { tabStore.activate(it) },
-            onClose = { id ->
-                webViews.remove(id)?.let { wv ->
-                    (wv.parent as? ViewGroup)?.removeView(wv)
-                    wv.destroy()
-                }
-                favicons.remove(id); progressMap.remove(id); loadingMap.remove(id)
-                if (readerTabs.remove(id)) readerVersion++
-                tabStore.closeTab(id)
-            },
+            onClose = { id -> destroyTab(id) },
             onNewTab = { tabStore.openTab(HOME_URL) },
+            onShowAll = { showTabSwitcher = true },
         )
 
-        // Address bar + Go
+        // Address bar: suggestions from tabs/bookmarks/history; search vs URL.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -423,40 +517,61 @@ fun TabbedBrowserScreen(
             OutlinedTextField(
                 value = urlBarText,
                 onValueChange = { urlBarText = it },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .onFocusChanged { urlFocused = it.isFocused },
                 singleLine = true,
                 shape = MaterialTheme.shapes.large,
                 leadingIcon = {
-                    androidx.compose.material3.Icon(
-                        androidx.compose.material.icons.Icons.Filled.Search,
-                        contentDescription = null,
-                        tint = NeonCyan,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
                 },
-                textStyle = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
+                trailingIcon = if (urlFocused && urlBarText.isNotEmpty()) {
+                    {
+                        Text(
+                            "✕",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.clickable { urlBarText = "" }.padding(8.dp),
+                        )
+                    }
+                } else null,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onBackground),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = NeonCyan,
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline,
                     cursorColor = NeonMagenta,
                     focusedLabelColor = NeonCyan,
                 ),
-                label = { Text("Search or enter address") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Go,
-                ),
+                label = { Text("Search ${searchEngine.label} or enter address") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { navigateTo(urlBarText) }),
             )
             Spacer(Modifier.width(8.dp))
             com.victorious.browser.ui.components.NeonButton("Go", onClick = { navigateTo(urlBarText) })
         }
 
-        // Nav controls: compact — back / forward / reload, then bookmark + overflow
-        // menu. Everything else (tools, toggles, panels) lives in the ⋮ menu so the
-        // chrome no longer overflows and clips controls off-screen.
+        val typed = urlBarText
+        if (urlFocused && typed.isNotBlank() && typed != activeTab?.url) {
+            val suggestions = remember(typed, tabs, bookmarks, history, activeId) {
+                buildSuggestions(typed, tabs, bookmarks, history, excludeTabId = activeId, limit = 6)
+            }
+            SuggestionList(
+                suggestions = suggestions,
+                typed = typed,
+                searchLabel = searchEngine.label,
+                onPick = { s ->
+                    if (s.tabId != null) {
+                        focusManager.clearFocus()
+                        tabStore.activate(s.tabId)
+                    } else {
+                        navigateTo(s.url)
+                    }
+                },
+                onSearch = { navigateTo(typed) },
+            )
+        }
+
+        // Nav controls: back / forward / reload-or-stop, recon chips, bookmark star, ⋮.
+        val activeLoadingNow = activeId?.let { loadingMap[it] } == true
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -469,8 +584,22 @@ fun TabbedBrowserScreen(
             NavButton("▶", enabled = activeTab?.canGoForward == true) {
                 activeId?.let { webViews[it]?.goForward() }
             }
-            NavButton("↻", enabled = activeId != null) {
-                activeId?.let { webViews[it]?.reload() }
+            if (activeLoadingNow) {
+                NavButton("✕", enabled = true) { activeId?.let { webViews[it]?.stopLoading() } }
+            } else {
+                NavButton("↻", enabled = activeId != null) { activeId?.let { webViews[it]?.reload() } }
+            }
+            // Honest recon chips: only what we actually know.
+            if (proxyOn) {
+                ReconChip("PROXY", NeonMagenta) { onOpenNetwork() }
+            }
+            val curUrl = activeTab?.url.orEmpty()
+            val cert = activeId?.let { certs[it] }
+            val tls = tlsHint(curUrl, cert?.issuedBy?.cName, proxyOn)
+            if (tls != null) {
+                ReconChip(tls.label, if (tls.warn) NeonMagenta else NeonCyan) {
+                    if (cert != null) showCertInfo = true
+                }
             }
             Spacer(Modifier.weight(1f))
 
@@ -480,11 +609,7 @@ fun TabbedBrowserScreen(
                 enabled = bmUrl.isNotBlank(),
                 onClick = {
                     val now = bookmarkStore.toggle(bmUrl, activeTab?.title ?: "")
-                    Toast.makeText(
-                        appContext,
-                        if (now) "Bookmarked" else "Bookmark removed",
-                        Toast.LENGTH_SHORT,
-                    ).show()
+                    Toast.makeText(appContext, if (now) "Bookmarked" else "Bookmark removed", Toast.LENGTH_SHORT).show()
                 },
             ) {
                 Icon(
@@ -495,7 +620,7 @@ fun TabbedBrowserScreen(
             }
 
             Box {
-                IconButton(onClick = { menuOpen = true }) {
+                IconButton(onClick = { menuRecon = false; menuOpen = true }) {
                     Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = NeonCyan)
                 }
                 @Suppress("UNUSED_EXPRESSION") readerVersion // recompose on reader changes
@@ -506,87 +631,48 @@ fun TabbedBrowserScreen(
                 }
                 val extsPaused = activeHost != null && activeHost in pausedHosts
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    DropdownMenuItem(
-                        text = { Text("New tab") },
-                        onClick = { menuOpen = false; tabStore.openTab(HOME_URL) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Find in page") },
-                        onClick = { menuOpen = false; showFind = true },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Share link") },
-                        onClick = { menuOpen = false; shareUrl() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Copy link") },
-                        onClick = { menuOpen = false; copyUrl() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Bookmarks") },
-                        onClick = { menuOpen = false; showBookmarks = true },
-                    )
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text(if (readerOn) "Reader mode: on" else "Reader mode: off") },
-                        onClick = { menuOpen = false; toggleReader() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (nightMode) "Night mode: on" else "Night mode: off") },
-                        onClick = { nightSettings.setEnabled(!nightMode); menuOpen = false },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (desktopUa) "Desktop site: on" else "Desktop site: off") },
-                        onClick = {
-                            desktopUa = !desktopUa
-                            webViews.values.forEach { applyVictoriousWebSettings(it, desktopUa) }
-                            activeId?.let { webViews[it]?.reload() }
-                            menuOpen = false
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(if (extsPaused) "Extensions: off here" else "Extensions: on here") },
-                        enabled = activeHost != null,
-                        onClick = {
-                            activeHost?.let { extStore.setHostPaused(it, it !in pausedHosts) }
-                            menuOpen = false
-                        },
-                    )
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text("Fleet panels…") },
-                        onClick = { menuOpen = false; showSwitcher = true },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Extensions") },
-                        onClick = { menuOpen = false; onOpenExtensions() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("User scripts") },
-                        onClick = { menuOpen = false; onOpenScripts() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("URL tools") },
-                        onClick = { menuOpen = false; showUrlTools = true },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Inject JS / HTML") },
-                        onClick = { menuOpen = false; showInject = true },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Screenshot → evidence") },
-                        onClick = { menuOpen = false; captureShot() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Network log") },
-                        onClick = { menuOpen = false; onOpenNetwork() },
-                    )
-                    if (onBackToLauncher != null) {
-                        HorizontalDivider()
+                    @Composable
+                    fun item(label: String, enabled: Boolean = true, keepOpen: Boolean = false, action: () -> Unit) {
                         DropdownMenuItem(
-                            text = { Text("Back to launcher") },
-                            onClick = { menuOpen = false; onBackToLauncher() },
+                            text = { Text(label) },
+                            enabled = enabled,
+                            onClick = { if (!keepOpen) menuOpen = false; action() },
                         )
+                    }
+                    if (!menuRecon) {
+                        item("New tab") { tabStore.openTab(HOME_URL) }
+                        item("Tabs (${tabs.size})…") { showTabSwitcher = true }
+                        HorizontalDivider()
+                        item("History") { showHistory = true }
+                        item("Bookmarks") { showBookmarks = true }
+                        item("Downloads") { showDownloads = true }
+                        HorizontalDivider()
+                        item("Find in page") { showFind = true }
+                        item("Share link") { shareUrl() }
+                        item("Copy link") { copyUrl() }
+                        item(if (desktopUa) "Desktop site: on" else "Desktop site: off") { applyDesktop(!desktopUa) }
+                        item(if (readerOn) "Reader mode: on" else "Reader mode: off") { toggleReader() }
+                        item(if (nightMode) "Night mode: on" else "Night mode: off") { nightSettings.setEnabled(!nightMode) }
+                        HorizontalDivider()
+                        item("Recon tools ▸", keepOpen = true) { menuRecon = true }
+                        item("Search engine: ${searchEngine.label}") { showEngineDialog = true }
+                        if (onBackToLauncher != null) item("All tools (launcher)") { onBackToLauncher() }
+                    } else {
+                        item("◂ Back", keepOpen = true) { menuRecon = false }
+                        HorizontalDivider()
+                        item(if (proxyOn) "Proxy history (proxy on)" else "Proxy history") { onOpenNetwork() }
+                        if (onOpenAntiPhish != null) item("Anti-Phish") { onOpenAntiPhish() }
+                        item("Inject JS / HTML") { showInject = true }
+                        item("URL tools") { showUrlTools = true }
+                        item("Screenshot → evidence") { captureShot() }
+                        if (certs[activeId ?: ""] != null) item("Certificate info") { showCertInfo = true }
+                        HorizontalDivider()
+                        item(if (extsPaused) "Extensions: off here" else "Extensions: on here", enabled = activeHost != null) {
+                            activeHost?.let { extStore.setHostPaused(it, it !in pausedHosts) }
+                        }
+                        item("Extensions") { onOpenExtensions() }
+                        item("User scripts") { onOpenScripts() }
+                        item("Fleet panels…") { showSwitcher = true }
                     }
                 }
             }
@@ -728,14 +814,111 @@ fun TabbedBrowserScreen(
     }
 
     if (showBookmarks) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         BookmarksSheet(
             bookmarks = bookmarks,
-            sheetState = sheetState,
             onDismiss = { showBookmarks = false },
             onOpen = { bm -> showBookmarks = false; doOpenUrl(bm.url, newTab = false) },
             onOpenNewTab = { bm -> showBookmarks = false; doOpenUrl(bm.url, newTab = true) },
             onRemove = { bm -> bookmarkStore.remove(bm.url) },
+        )
+    }
+
+    if (showHistory) {
+        HistorySheet(
+            history = history,
+            onDismiss = { showHistory = false },
+            onOpen = { h -> showHistory = false; doOpenUrl(h.url, newTab = false) },
+            onOpenNewTab = { h -> showHistory = false; doOpenUrl(h.url, newTab = true) },
+            onRemove = { h -> historyStore.remove(h.url) },
+            onClearAll = { historyStore.clear() },
+        )
+    }
+
+    if (showDownloads) {
+        DownloadsSheet(
+            records = downloads,
+            statusOf = { downloadStore.status(it) },
+            onDismiss = { showDownloads = false },
+            onOpenFile = { r ->
+                val uri = downloadStore.fileUri(r.downloadId)
+                if (uri == null) {
+                    Toast.makeText(appContext, "File not available", Toast.LENGTH_SHORT).show()
+                } else {
+                    val view = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, r.mimeType.ifBlank { context.contentResolver.getType(uri) ?: "*/*" })
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    runCatching { context.startActivity(view) }
+                        .onFailure { Toast.makeText(appContext, "No app can open this file", Toast.LENGTH_SHORT).show() }
+                }
+            },
+            onRemove = { r, deleteFile -> downloadStore.remove(r.downloadId, deleteFile) },
+        )
+    }
+
+    if (showTabSwitcher) {
+        TabSwitcherSheet(
+            tabs = tabs,
+            activeId = activeId,
+            favicons = favicons,
+            onDismiss = { showTabSwitcher = false },
+            onSelect = { tabStore.activate(it); showTabSwitcher = false },
+            onClose = { destroyTab(it) },
+            onNewTab = { tabStore.openTab(HOME_URL); showTabSwitcher = false },
+            onCloseOthers = {
+                val keep = activeId
+                tabs.map { it.id }.filter { it != keep }.forEach { destroyTab(it) }
+            },
+            onCloseAll = {
+                tabs.map { it.id }.forEach { destroyTab(it) }
+                showTabSwitcher = false
+            },
+        )
+    }
+
+    if (showEngineDialog) {
+        SearchEngineDialog(
+            current = searchEngine,
+            onPick = { browserPrefs.setSearchEngine(it); showEngineDialog = false },
+            onDismiss = { showEngineDialog = false },
+        )
+    }
+
+    linkMenu?.let { (url, isImage) ->
+        LinkMenuDialog(
+            url = url,
+            isImage = isImage,
+            onDismiss = { linkMenu = null },
+            onOpen = { doOpenUrl(url, newTab = false) },
+            onOpenNewTab = { doOpenUrl(url, newTab = true) },
+            onOpenBackground = {
+                tabStore.openTab(url, activate = false)
+                Toast.makeText(appContext, "Opened in background tab", Toast.LENGTH_SHORT).show()
+            },
+            onCopy = { copyText(url) },
+            onShare = { shareText(url) },
+            onBookmark = {
+                bookmarkStore.add(url, "")
+                Toast.makeText(appContext, "Bookmarked", Toast.LENGTH_SHORT).show()
+            },
+            onDownload = {
+                startDownloadImpl(url, activeId?.let { webViews[it]?.settings?.userAgentString }, null, null)
+            },
+        )
+    }
+
+    if (showCertInfo) {
+        val cert = activeId?.let { certs[it] }
+        AlertDialog(
+            onDismissRequest = { showCertInfo = false },
+            title = { Text("TLS certificate (as seen by WebView)") },
+            text = {
+                Text(
+                    if (cert == null) "No certificate for this page." else certSummary(cert, proxyOn),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            },
+            confirmButton = { TextButton(onClick = { showCertInfo = false }) { Text("Close", color = NeonCyan) } },
         )
     }
 
@@ -795,6 +978,7 @@ private fun TabBar(
     onSelect: (String) -> Unit,
     onClose: (String) -> Unit,
     onNewTab: () -> Unit,
+    onShowAll: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -821,7 +1005,54 @@ private fun TabBar(
             onClick = onNewTab,
             colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
         ) { Text("＋", style = MaterialTheme.typography.titleMedium) }
+        // Tab-count square, Chrome-style: opens the full tab switcher.
+        Box(
+            Modifier
+                .size(28.dp)
+                .border(1.5.dp, NeonCyan, RoundedCornerShape(6.dp))
+                .clickable(onClick = onShowAll),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                if (tabs.size > 99) ":D" else tabs.size.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = NeonCyan,
+            )
+        }
     }
+}
+
+@Composable
+private fun ReconChip(label: String, color: Color, onClick: () -> Unit) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelSmall,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .padding(start = 4.dp)
+            .widthIn(max = 150.dp)
+            .border(1.dp, color.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
+}
+
+private fun certSummary(cert: SslCertificate, proxyOn: Boolean): String {
+    val fmt = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM)
+    val sb = StringBuilder()
+    sb.append("Issued to: ").append(cert.issuedTo?.dName.orEmpty()).append("\n\n")
+    sb.append("Issued by: ").append(cert.issuedBy?.dName.orEmpty()).append("\n\n")
+    cert.validNotBeforeDate?.let { sb.append("Valid from: ").append(fmt.format(it)).append("\n") }
+    cert.validNotAfterDate?.let { sb.append("Valid until: ").append(fmt.format(it)).append("\n") }
+    if (proxyOn) {
+        sb.append("\nThe inspection proxy is on, so this is the certificate the proxy presented to WebView ")
+            .append("(normally issued by the Victorious inspection CA), not the origin server's certificate.")
+    } else {
+        sb.append("\nShown as reported by WebView after the load. It is not an independent validation.")
+    }
+    return sb.toString()
 }
 
 @Composable
@@ -949,71 +1180,6 @@ private fun FleetPanelSwitcherSheet(
                         }
                         TextButton(onClick = { onOpenNewTab(panel) }) {
                             Text("New tab", color = NeonCyan)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun BookmarksSheet(
-    bookmarks: List<Bookmark>,
-    sheetState: androidx.compose.material3.SheetState,
-    onDismiss: () -> Unit,
-    onOpen: (Bookmark) -> Unit,
-    onOpenNewTab: (Bookmark) -> Unit,
-    onRemove: (Bookmark) -> Unit,
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-            Text(
-                "Bookmarks",
-                style = MaterialTheme.typography.titleMedium,
-                color = NeonMagenta,
-            )
-            Spacer(Modifier.height(8.dp))
-            if (bookmarks.isEmpty()) {
-                Text(
-                    "No bookmarks yet. Tap the ☆ in the toolbar to save the current page.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Column {
-                bookmarks.forEach { bm ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(
-                            Modifier
-                                .weight(1f)
-                                .clickable { onOpen(bm) },
-                        ) {
-                            Text(
-                                bm.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                bm.url,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        TextButton(onClick = { onOpenNewTab(bm) }) {
-                            Text("New tab", color = NeonCyan)
-                        }
-                        TextButton(onClick = { onRemove(bm) }) {
-                            Text("Remove", color = NeonMagenta)
                         }
                     }
                 }
