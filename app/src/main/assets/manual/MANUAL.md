@@ -1,6 +1,6 @@
 # Victorious Browser — In-App Manual
 
-Last updated: 2026-10-20. Authorized-testing use only. This manual is the single
+Last updated: 2026-10-30. Authorized-testing use only. This manual is the single
 source of truth for the in-app Help / Manual screen: the app bundles this file as
 an asset and renders it, so the on-device help and this document never drift.
 
@@ -41,24 +41,50 @@ tabs; the **tab-count** square opens the tab switcher (grid with favicon, title 
 URL; New tab, Close others, Close all). Long-press a link for Open, New tab,
 Background tab, Copy, Share, Bookmark and Download.
 
-The **⋮ menu** holds New tab, Tabs, History, Bookmarks, Downloads, Find in page
-(next/previous match), Share/Copy link, Desktop site, Reader, Night and Search
-engine. **Recon tools ▸** opens a second page: Proxy history, Anti-Phish, Inject
-(one-off JS or raw HTML), URL tools (encode/decode, query view, shortener, URLhaus /
-VirusTotal with your own keys), Screenshot → evidence, Certificate info, per-site
-Extensions toggle, Extensions, User scripts and Fleet panels. History (max 500
-entries) and bookmarks are stored on the device and can be searched and deleted.
-Downloads go through Android's DownloadManager and are listed under Downloads.
+The **⋮ menu** holds New tab, **New private tab**, Tabs, History, Bookmarks,
+Downloads, Find in page (next/previous match), Share/Copy link, Desktop site,
+Reader, Night and Search engine. **Recon tools ▸** opens a second page: Proxy
+history, **Send to repeater** (seeds Modify / Replay from the latest capture for
+this origin), **Cookie jar** (per-URL CookieManager inspector: edit / delete /
+export JSON, JWT decode-not-verify), **Web storage** (localStorage / sessionStorage
+for the current origin, with the same JWT decode), **Console** (WebView
+`console.*` + main-frame load errors), **Clear site data** (cookies + web storage
+for this origin only), Anti-Phish, Inject (one-off JS or raw HTML), URL tools
+(encode/decode, query view, shortener, URLhaus / VirusTotal with your own keys),
+Screenshot → evidence, Certificate info, per-site Extensions toggle, Extensions,
+User scripts and Fleet panels. History (max 500 entries) and bookmarks are stored
+on the device and can be searched and deleted. Downloads go through Android's
+DownloadManager and are listed under Downloads. Opening Network / Anti-Phish /
+Extensions / Scripts from this menu **keeps the live WebViews composed**
+underneath so a round-trip to those tools does not destroy tab state.
+
+**Private tabs.** A magenta **P** badge / **PRIVATE** chip marks them. They skip
+browsing-history writes and are never written to the tab session. When the WebView
+Profile API is available they share an isolated `incognito` profile (cookies and
+storage); closing the last private tab deletes that profile. Without multi-profile
+support they still skip history/restore but share the default cookie jar — use
+**Sandboxes** for named isolation on those devices.
+
+**Session restore.** Non-private open tabs (URL + title, max 20) are saved and
+reloaded after the app process is killed. JS heap and the back-forward list are
+not restored; each tab loads its last URL fresh.
 
 **Recon chips.** **PROXY** appears while the intercepting proxy runs (tap it for
 history). The transport chip shows **HTTP · plain** for unencrypted pages or
 **TLS · issuer** with the certificate WebView reported (tap it for details). With
-the proxy on, that is the proxy's inspection certificate, not the origin's. There
-is deliberately no lock icon: the chip reports what was seen, not a verdict.
+the proxy on, that is the proxy's inspection certificate, not the origin's. A
+magenta **JS N** chip appears when this tab has console errors (tap for the
+console). There is deliberately no lock icon: the chip reports what was seen, not
+a verdict.
 
 **Limitations.** Downloads are fetched by DownloadManager directly and do not
-pass through the proxy. blob: and data: downloads are not supported. Tabs are not
-restored after the app process is killed.
+pass through the proxy. blob: and data: downloads are not supported. Session
+restore reloads URLs only (not JS heap / history list). CookieManager does not
+expose HttpOnly / Secure / SameSite flags — the jar shows name=value for cookies
+that would be sent on a request. Clear site data does not wipe Cache / IndexedDB /
+service workers. HAR export of proxy history is **secret-stripped** (no
+cookies/Authorization, no bodies). The on-device JSON export still keeps full
+captures for local analysis.
 
 **Safety.** The Inject tool deliberately does not sanitize HTML — it is for
 testing how your own pages handle untrusted markup. User scripts are scoped to
@@ -87,7 +113,10 @@ trusted only inside this app.
 inspection proxy and intercept on. Browse; the history lists method, URL, host,
 status, sizes, headers, request + response bodies, broken-out cookies, and decoded
 (not verified) JWTs. Search and filter by method / status / host / content-type.
-Clear, Export JSON, or Modify / Replay an exchange.
+Clear, Export JSON (full local capture), **Export HAR** (HAR 1.2 with cookies /
+Authorization / tokens stripped and bodies omitted), or Modify / Replay an
+exchange. From the browser, **Send to repeater** jumps here with the latest
+same-origin capture already loaded in the editor.
 
 **Modify-and-replay (Burp-lite).** Intercept in-flight requests, edit method / URL
 / headers / body, then Forward or Drop; or replay any history entry through the

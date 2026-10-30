@@ -1,6 +1,7 @@
 package com.victorious.browser.browser
 
 import android.graphics.Bitmap
+import android.webkit.ConsoleMessage
 import android.webkit.GeolocationPermissions
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -17,6 +18,7 @@ class VictoriousWebChromeClient(
     private val onProgressChanged: (Int) -> Unit,
     private val onTitleChanged: (String) -> Unit,
     private val onIconChanged: (Bitmap?) -> Unit = {},
+    private val onConsoleMessage: (level: String, message: String, source: String, line: Int) -> Unit = { _, _, _, _ -> },
 ) : WebChromeClient() {
 
     override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -39,5 +41,16 @@ class VictoriousWebChromeClient(
         callback: GeolocationPermissions.Callback?,
     ) {
         callback?.invoke(origin, false, false)
+    }
+
+    override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+        val msg = consoleMessage ?: return super.onConsoleMessage(consoleMessage)
+        onConsoleMessage(
+            ConsoleLog.normalizeLevel(msg.messageLevel()?.name),
+            msg.message().orEmpty(),
+            msg.sourceId().orEmpty(),
+            msg.lineNumber(),
+        )
+        return true
     }
 }

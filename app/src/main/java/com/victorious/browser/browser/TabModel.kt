@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
+/** WebView Profile name for private tabs (valid [com.victorious.browser.sandbox.SandboxName]). */
+const val INCOGNITO_PROFILE = "incognito"
+
 /**
  * One browser tab's metadata.
  *
@@ -20,6 +23,8 @@ data class BrowserTab(
     val url: String,
     val canGoBack: Boolean = false,
     val canGoForward: Boolean = false,
+    /** Private tab: skipped by history + session restore. Shares an isolated WebView profile when available. */
+    val incognito: Boolean = false,
 )
 
 /**
@@ -61,13 +66,31 @@ class TabStore(
      * Open a new tab for [url]. Appends to the end. When [activate] is true (the
      * default) the new tab becomes active. Returns the new tab's id.
      */
-    fun openTab(url: String, title: String = "", activate: Boolean = true): String {
-        val tab = BrowserTab(id = idGenerator(), title = title, url = url)
+    fun openTab(
+        url: String,
+        title: String = "",
+        activate: Boolean = true,
+        incognito: Boolean = false,
+    ): String {
+        val tab = BrowserTab(id = idGenerator(), title = title, url = url, incognito = incognito)
         _tabs.value = _tabs.value + tab
         if (activate || _activeTabId.value == null) {
             _activeTabId.value = tab.id
         }
         return tab.id
+    }
+
+    /**
+     * Replace the tab list (process-death session restore). [activeId] must refer to
+     * a restored tab; otherwise the last tab is selected. Empty [tabs] clears.
+     */
+    fun restore(tabs: List<BrowserTab>, activeId: String?) {
+        _tabs.value = tabs
+        _activeTabId.value = when {
+            tabs.isEmpty() -> null
+            activeId != null && tabs.any { it.id == activeId } -> activeId
+            else -> tabs.last().id
+        }
     }
 
     /**

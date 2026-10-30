@@ -54,6 +54,9 @@ fun NetworkHistoryScreen(
     onBack: () -> Unit,
     onSendToFleet: () -> Unit = {},
     modifier: Modifier = Modifier,
+    /** Open Modify / Replay immediately (browser "Send to repeater"). */
+    initialReplay: CapturedExchange? = null,
+    startInRepeater: Boolean = false,
 ) {
     val context = LocalContext.current
     val exchanges by CaptureStore.exchanges.collectAsState()
@@ -61,8 +64,8 @@ fun NetworkHistoryScreen(
     val interceptOn by InterceptController.enabled.collectAsState()
     val pendingIntercept by InterceptController.pending.collectAsState()
     var selected by remember { mutableStateOf<CapturedExchange?>(null) }
-    var modifySeed by remember { mutableStateOf<CapturedExchange?>(null) }
-    var showModify by remember { mutableStateOf(false) }
+    var modifySeed by remember { mutableStateOf<CapturedExchange?>(initialReplay) }
+    var showModify by remember { mutableStateOf(startInRepeater || initialReplay != null) }
 
     var searchQuery by remember { mutableStateOf("") }
     var filterMethod by remember { mutableStateOf("") }
@@ -202,7 +205,9 @@ fun NetworkHistoryScreen(
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Button(onClick = { CaptureStore.clear() }) { Text("Clear") }
@@ -213,6 +218,17 @@ fun NetworkHistoryScreen(
                 },
                 enabled = filtered.isNotEmpty(),
             ) { Text("Export JSON") }
+            Button(
+                onClick = {
+                    val file = HarExporter.writeToFile(context, filtered)
+                    Toast.makeText(
+                        context,
+                        "HAR (secrets stripped) → ${file.absolutePath}",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                },
+                enabled = filtered.isNotEmpty(),
+            ) { Text("Export HAR") }
             Button(
                 onClick = {
                     modifySeed = null

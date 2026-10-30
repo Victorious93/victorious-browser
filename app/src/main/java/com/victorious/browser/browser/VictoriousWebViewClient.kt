@@ -1,6 +1,7 @@
 package com.victorious.browser.browser
 
 import android.graphics.Bitmap
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -36,6 +37,7 @@ import com.victorious.browser.antiphish.AntiPhishController
 class VictoriousWebViewClient(
     private val onUrlChanged: (String) -> Unit,
     private val onLoadingChanged: (Boolean) -> Unit,
+    private val onPageError: (url: String, description: String, errorCode: Int) -> Unit = { _, _, _ -> },
 ) : WebViewClient() {
 
     override fun shouldInterceptRequest(
@@ -112,5 +114,19 @@ class VictoriousWebViewClient(
     override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
         super.doUpdateVisitedHistory(view, url, isReload)
         if (!url.isNullOrBlank()) onUrlChanged(url)
+    }
+
+    override fun onReceivedError(
+        view: WebView,
+        request: WebResourceRequest?,
+        error: WebResourceError?,
+    ) {
+        super.onReceivedError(view, request, error)
+        if (request?.isForMainFrame != true) return
+        onPageError(
+            request.url?.toString().orEmpty(),
+            error?.description?.toString() ?: "error",
+            error?.errorCode ?: 0,
+        )
     }
 }
