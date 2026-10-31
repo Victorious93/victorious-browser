@@ -95,6 +95,8 @@ class HistoryStore private constructor(context: Context) {
     fun retitle(url: String, title: String) = set(HistoryLogic.retitle(_entries.value, url, title))
     fun remove(url: String) = set(_entries.value.filterNot { it.url == url })
     fun clear() = set(emptyList())
+    /** Keep only entries matching [keep] (used by Fire). */
+    fun retain(keep: (HistoryEntry) -> Boolean) = set(_entries.value.filter(keep))
 
     private fun set(next: List<HistoryEntry>) {
         if (next == _entries.value) return

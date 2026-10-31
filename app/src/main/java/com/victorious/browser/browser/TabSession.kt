@@ -94,6 +94,11 @@ class TabSessionStore private constructor(context: Context) {
         prefs.edit().putString(KEY, TabSessionLogic.encode(snap)).apply()
     }
 
+    /** Forget the saved session (Fire / clear on exit). */
+    fun clear() {
+        prefs.edit().remove(KEY).apply()
+    }
+
     fun restoreInto(store: TabStore) {
         val (tabs, active) = TabSessionLogic.toBrowserTabs(load())
         if (tabs.isEmpty()) return
