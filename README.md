@@ -148,6 +148,13 @@ for the developer's own traffic.
   design system (`ToolScaffold` + cyan→magenta `BrandRing`). No new dependencies.
   (landed on `feature/in-app-help`)
 
+- **Privacy protections & Fire** — opt-in (all OFF by default) tracker/ad
+  loading protection with per-site exceptions (blocked requests still logged),
+  shield Privacy Dashboard, Fire button (this tab / everywhere, keep history /
+  cookies) with Fireproof sites, Force HTTPS, GPC, link tracking-param stripping,
+  referrer trimming, lite cookie pop-up handling, clear-on-exit, DuckDuckGo
+  default search + `!g`/`!w` bangs. Code in `browser/privacy/`. (landed on
+  `feat/ddg-privacy-features`)
 
 ## Fleet export + Metasploit RPC
 

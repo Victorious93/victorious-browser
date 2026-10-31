@@ -72,6 +72,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Opt-in "Clear on exit": Fire everywhere (fireproofed sites kept) when backgrounded/closed.
+        if (!isChangingConfigurations) {
+            val privacy = com.victorious.browser.browser.privacy.PrivacySettings.get(this)
+            if (privacy.clearOnExit.value) {
+                com.victorious.browser.browser.privacy.FireBurner.burn(
+                    context = this,
+                    opts = com.victorious.browser.browser.privacy.FireOptions(),
+                    fireproof = privacy.fireproof.value,
+                )
+            }
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

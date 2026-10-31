@@ -107,6 +107,18 @@ import com.victorious.browser.inspect.CapturedExchange
 import com.victorious.browser.inspect.LocalProxyService
 import com.victorious.browser.sandbox.SandboxManager
 import java.net.URI
+import com.victorious.browser.browser.privacy.Bangs
+import com.victorious.browser.browser.privacy.FireBurner
+import com.victorious.browser.browser.privacy.FireIcon
+import com.victorious.browser.browser.privacy.FireOptions
+import com.victorious.browser.browser.privacy.FireScope
+import com.victorious.browser.browser.privacy.FireSheet
+import com.victorious.browser.browser.privacy.PrivacyDashboardSheet
+import com.victorious.browser.browser.privacy.PrivacyInjector
+import com.victorious.browser.browser.privacy.PrivacySettings
+import com.victorious.browser.browser.privacy.PrivacySettingsSheet
+import com.victorious.browser.browser.privacy.PrivacyShieldIcon
+import com.victorious.browser.browser.privacy.PrivacyStats
 
 private const val HOME_URL = "https://example.com"
 
@@ -216,6 +228,16 @@ fun TabbedBrowserScreen(
     var showConsole by remember { mutableStateOf(false) }
     var showClearSite by remember { mutableStateOf(false) }
 
+    // Privacy protections (all toggles default OFF) + Fire.
+    val privacy = remember { PrivacySettings.get(appContext) }
+    val privacyBlocking by privacy.blockTrackers.collectAsState()
+    val fireproofHosts by privacy.fireproof.collectAsState()
+    val privacyPages by PrivacyStats.pages.collectAsState()
+    val sessionBlocked by PrivacyStats.sessionBlocked.collectAsState()
+    var showDashboard by remember { mutableStateOf(false) }
+    var showFire by remember { mutableStateOf(false) }
+    var showPrivacySettings by remember { mutableStateOf(false) }
+
     var meshChecking by remember { mutableStateOf(false) }
     var meshBlock by remember { mutableStateOf<MeshOpenDecision.Blocked?>(null) }
     var pendingMeshPanel by remember { mutableStateOf<Panel?>(null) }
@@ -303,6 +325,7 @@ fun TabbedBrowserScreen(
             val netId = NetIdSettings.get(appContext)
             SpoofInjector.installDocumentStart(this, netId)
             SpoofInjector.applyUserAgent(this, netId.fingerprint.value)
+            val privacyStartJs = PrivacyInjector.installDocumentStart(this, privacy)
             webViewClient = VictoriousWebViewClient(
                 onUrlChanged = { url ->
                     if (readerTabs.onUrlChanged(tabId, url)) readerVersion++
@@ -323,6 +346,9 @@ fun TabbedBrowserScreen(
                 onPageError = { errUrl, desc, code ->
                     appendConsole(tabId, "ERROR", "Page error $code: $desc", errUrl, 0)
                 },
+                tabId = tabId,
+                privacy = privacy,
+                privacyStartJs = privacyStartJs,
             )
             webChromeClient = VictoriousWebChromeClient(
                 onProgressChanged = { p ->
@@ -362,7 +388,7 @@ fun TabbedBrowserScreen(
                     else -> false // let WebView handle text selection etc.
                 }
             }
-            loadUrl(initialUrl)
+            VictoriousWebViewClient.privacyLoad(this, initialUrl, tabId, privacy)
         }
 
     fun destroyTab(id: String) {
@@ -372,6 +398,7 @@ fun TabbedBrowserScreen(
         }
         favicons.remove(id); progressMap.remove(id); loadingMap.remove(id); certs.remove(id)
         consoleLogs.remove(id)
+        PrivacyStats.remove(id)
         if (readerTabs.remove(id)) readerVersion++
         val wasPrivate = tabStore.get(id)?.incognito == true
         tabStore.closeTab(id)
@@ -383,9 +410,9 @@ fun TabbedBrowserScreen(
 
     fun navigateTo(raw: String) {
         val id = activeId ?: return
-        val target = normalizeUrl(raw, searchEngine.queryPrefix)
+        val target = Bangs.resolve(raw) ?: normalizeUrl(raw, searchEngine.queryPrefix)
         urlBarText = target
-        webViews[id]?.loadUrl(target)
+        webViews[id]?.let { urlBarText = VictoriousWebViewClient.privacyLoad(it, target, id, privacy) }
         focusManager.clearFocus()
     }
 
@@ -396,7 +423,7 @@ fun TabbedBrowserScreen(
         } else {
             val id = activeId!!
             tabStore.updateUrl(id, target)
-            webViews[id]?.loadUrl(target)
+            webViews[id]?.let { VictoriousWebViewClient.privacyLoad(it, target, id, privacy) }
         }
     }
 
@@ -529,6 +556,37 @@ fun TabbedBrowserScreen(
         findMatches = 0
         findOrdinal = 0
         activeId?.let { webViews[it]?.clearMatches() }
+    }
+
+    fun runFire(opts: FireOptions) {
+        showFire = false
+        val id = activeId
+        FireBurner.burn(
+            context = appContext,
+            opts = opts,
+            fireproof = privacy.fireproof.value,
+            tabUrl = currentUrl(),
+            tabWebView = id?.let { webViews[it] },
+        ) {
+            Toast.makeText(
+                appContext,
+                if (opts.scope == FireScope.EVERYWHERE) "Burned: tabs and data cleared" else "Burned this tab",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
+
+    // Fire (manual or clear-on-exit) asks the UI to close tabs; replayed if we weren't composed.
+    LaunchedEffect(Unit) {
+        FireBurner.events.collect { opts ->
+            if (opts.scope == FireScope.EVERYWHERE) {
+                tabStore.tabs.value.map { it.id }.forEach { destroyTab(it) }
+            } else {
+                tabStore.activeTab()?.id?.let { destroyTab(it) }
+            }
+            if (tabStore.count == 0 || opts.scope == FireScope.THIS_TAB) tabStore.openTab(HOME_URL)
+            FireBurner.consumeEvents()
+        }
     }
 
     // Destroy all WebViews when the screen leaves composition.
@@ -694,6 +752,23 @@ fun TabbedBrowserScreen(
             }
             Spacer(Modifier.weight(1f))
 
+            // Privacy Dashboard shield + Fire button (brand-drawn glyphs).
+            val pageBlocked = activeId?.let { privacyPages[it]?.blockedCount } ?: 0
+            IconButton(onClick = { showDashboard = true }) {
+                Box(contentAlignment = Alignment.Center) {
+                    PrivacyShieldIcon(active = privacyBlocking)
+                    if (pageBlocked > 0) {
+                        Text(
+                            pageBlocked.coerceAtMost(99).toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = NeonMagenta,
+                            modifier = Modifier.align(Alignment.BottomEnd),
+                        )
+                    }
+                }
+            }
+            IconButton(onClick = { showFire = true }) { FireIcon() }
+
             val bmUrl = activeTab?.url ?: ""
             val isBookmarked = bmUrl.isNotBlank() && bookmarks.any { it.url == bmUrl }
             IconButton(
@@ -745,6 +820,13 @@ fun TabbedBrowserScreen(
                         item(if (desktopUa) "Desktop site: on" else "Desktop site: off") { applyDesktop(!desktopUa) }
                         item(if (readerOn) "Reader mode: on" else "Reader mode: off") { toggleReader() }
                         item(if (nightMode) "Night mode: on" else "Night mode: off") { nightSettings.setEnabled(!nightMode) }
+                        HorizontalDivider()
+                        item("Fire…") { showFire = true }
+                        val fp = activeHost != null && privacy.isFireproof(activeHost)
+                        item(if (fp) "Fireproofed (tap to remove)" else "Fireproof this site", enabled = activeHost != null) {
+                            activeHost?.let { h -> if (fp) privacy.removeFireproof(fireproofHosts.firstOrNull { f -> h == f || h.endsWith(".$f") } ?: h) else privacy.addFireproof(h) }
+                        }
+                        item("Privacy protections…") { showPrivacySettings = true }
                         HorizontalDivider()
                         item("Recon tools ▸", keepOpen = true) { menuRecon = true }
                         item("Search engine: ${searchEngine.label}") { showEngineDialog = true }
@@ -1078,6 +1160,28 @@ fun TabbedBrowserScreen(
                 Toast.makeText(appContext, "Cleared site data for ${origin ?: url}", Toast.LENGTH_SHORT).show()
             },
         )
+    }
+
+    if (showDashboard) {
+        PrivacyDashboardSheet(
+            host = hostOf(currentUrl()),
+            stats = activeId?.let { privacyPages[it] },
+            sessionBlocked = sessionBlocked,
+            settings = privacy,
+            onOpenSettings = { showDashboard = false; showPrivacySettings = true },
+            onDismiss = { showDashboard = false },
+        )
+    }
+    if (showFire) {
+        FireSheet(
+            host = hostOf(currentUrl()),
+            fireproofCount = fireproofHosts.size,
+            onFire = { runFire(it) },
+            onDismiss = { showFire = false },
+        )
+    }
+    if (showPrivacySettings) {
+        PrivacySettingsSheet(settings = privacy, onDismiss = { showPrivacySettings = false })
     }
 
     if (showCertInfo) {

@@ -378,6 +378,32 @@ the active tab's host without uninstalling them.
 The older **Scripts** button (host-pattern-only, no metadata block) remains for
 simple one-off snippets; prefer **Extensions** for real userscripts.
 
+
+## Privacy protections & Fire
+
+Privacy features inspired by privacy-first mobile browsers, in Victorious neon. **Every toggle is OFF by default** because for recon, trackers, raw URLs, and referrers are often the signal. Open **⋮ → Privacy protections…** or tap the **shield** next to the address bar.
+
+**What it does**
+- **Fire** (flame button / ⋮ → Fire…): a confirm sheet with *Burn this tab* (that site's cookies, storage, and history, then the tab closes) or *Close all tabs & burn everywhere* (all tabs, including private ones, cookies, site storage, cache, HTTP auth, history, geolocation grants, saved tab session). Optional *Keep history* / *Keep cookies & site data*. It **never** touches bookmarks, downloads, proxy history/HAR/CaptureStore, extensions, or fireproofed sites' first-party cookies and storage.
+- **Fireproof sites**: ⋮ → *Fireproof this site*, the shield sheet, or the manager in Privacy protections. Subdomains of a fireproofed site are covered too.
+- **Tracker & ad loading protection**: blocks *third-party* requests to a bundled, hand-curated host list (advertising, analytics, social, session replay, cryptomining). There are per-site exceptions ("Protections on this site" in the shield sheet). It works with the proxy on or off. Blocked requests are **still recorded** in Proxy history, marked blocked.
+- **Privacy Dashboard** (shield): per page, it shows trackers blocked or seen, categories, domains, HTTPS upgrades, tracking params stripped, and cookie pop-ups handled, plus a session total.
+- **Force HTTPS**: upgrades http→https for typed and clicked top-level navigations. It skips IPs, localhost, single-label/LAN names (.local/.lan/.internal/.home/.test/.onion/.ts.net), and custom ports, and falls back to http if the upgraded load fails.
+- **Global Privacy Control**: sends `Sec-GPC: 1` and sets `navigator.globalPrivacyControl = true`.
+- **Strip link tracking**: removes utm_*, fbclid, gclid, msclkid, mc_eid, and similar parameters from top-level navigations.
+- **Trim referrer**: same-site navigations keep the full referrer, cross-site ones send origin only, and https→http sends none. A strict-origin-when-cross-origin policy is also injected for subresources.
+- **Cookie pop-up protection (lite)**: `userscripts/cookie-popups.user.js` clicks "Reject" on common consent managers or hides the banner.
+- **Clear on exit**: runs Fire (everywhere, fireproof respected) when the app goes to the background or closes.
+- **Search**: DuckDuckGo is the default engine. Bangs work in the address bar: `!g`, `!w`, `!b`, `!ddg`, `!gh`, `!yt` (e.g. `!w kotlin` or `kotlin !w`).
+
+**Honest limits**
+- The tracker list is small (~120 hosts), not a full blocklist. First-party and CNAME-cloaked trackers are not caught. The site comparison uses an approximate base-domain rule (no full Public Suffix List).
+- The GPC header, Referer, param stripping, and HTTPS upgrade apply only to top-level GET navigations the browser issues or re-issues. They don't apply to POST forms, redirects, or subresources (WebView limits). The JS GPC flag applies to every page.
+- Cookie pop-up handling is heuristic. It won't reach cross-origin iframes and doesn't speak the TCF API. Some banners will remain, and some sites may break. Turn it off per need.
+- Fireproofed cookies are preserved by re-writing them. HttpOnly and original expiry attributes are lost (they are re-set as Path=/, 1-year, Secure on https). Cache clearing is always global.
+- Clear on exit can't run if Android kills the process outright. Tabs close the next time the browser screen is shown.
+- Not included: email protection, AI chat, app-level tracking protection VPN, sync.
+
 ## UI / Navigation (Neon Design System)
 
 The launcher (`FleetPanelScreen`) is a grouped dashboard with a brand-ring hero:

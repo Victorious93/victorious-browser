@@ -189,3 +189,13 @@ Self-authored example userscripts shipped with Victorious Browser:
 
 These are tiny demos for the WebView-native userscript engine. They are NOT
 third-party browser extensions and do NOT implement the WebExtension API.
+
+-----------------------------------------------------------------------------
+Tracker host list (app/src/main/java/.../browser/privacy/TrackerList.kt) and
+cookie pop-up script (app/src/main/assets/userscripts/cookie-popups.user.js)
+Copyright (c) Victorious Fleet
+License: same as this project
+
+Hand-curated from public knowledge of widely documented ad/analytics domains.
+NOT derived from DuckDuckGo Tracker Radar (CC BY-NC-SA 4.0), EasyList, or any
+other third-party list. No DuckDuckGo code, names, or artwork are used.
