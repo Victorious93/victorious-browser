@@ -303,4 +303,45 @@ class TabStoreTest {
         s.closeAll()
         assertFalse(s.hasRecentlyClosed)
     }
+
+    // --- otherTabIds / tabIdsAfter (close-other-tabs helpers) --------------------
+
+    @Test
+    fun other_tab_ids_returns_all_but_kept_in_order() {
+        val s = store()
+        val a = s.openTab("https://a.example")
+        val b = s.openTab("https://b.example")
+        val c = s.openTab("https://c.example")
+        assertEquals(listOf(a, c), s.otherTabIds(b))
+    }
+
+    @Test
+    fun other_tab_ids_empty_for_unknown_or_single_tab() {
+        val s = store()
+        val a = s.openTab("https://a.example")
+        assertEquals(emptyList<String>(), s.otherTabIds(a))        // only tab
+        assertEquals(emptyList<String>(), s.otherTabIds("missing")) // unknown id
+    }
+
+    @Test
+    fun closing_all_other_tabs_leaves_kept_active() {
+        val s = store()
+        s.openTab("https://a.example")
+        val b = s.openTab("https://b.example")
+        s.openTab("https://c.example")
+        s.otherTabIds(b).forEach { s.closeTab(it) }
+        assertEquals(1, s.count)
+        assertEquals(b, s.activeTabId.value)
+    }
+
+    @Test
+    fun tab_ids_after_returns_following_tabs() {
+        val s = store()
+        val a = s.openTab("https://a.example")
+        val b = s.openTab("https://b.example")
+        val c = s.openTab("https://c.example")
+        assertEquals(listOf(b, c), s.tabIdsAfter(a))
+        assertEquals(emptyList<String>(), s.tabIdsAfter(c))
+        assertEquals(emptyList<String>(), s.tabIdsAfter("missing"))
+    }
 }

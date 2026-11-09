@@ -140,6 +140,22 @@ class TabStore(
         // still valid (it was not the removed id).
     }
 
+    /**
+     * Ids of every tab except [keepId], in tab order — for "close other tabs".
+     * Empty when [keepId] is not an open tab. (The UI closes each so it can also
+     * tear down the matching WebView; closing routes through [closeTab], so the
+     * recently-closed stack and active-tab invariant stay correct.)
+     */
+    fun otherTabIds(keepId: String): List<String> =
+        if (_tabs.value.any { it.id == keepId }) _tabs.value.filterNot { it.id == keepId }.map { it.id }
+        else emptyList()
+
+    /** Ids of the tabs positioned after [id], in order — for "close tabs to the right". */
+    fun tabIdsAfter(id: String): List<String> {
+        val idx = indexOf(id)
+        return if (idx < 0) emptyList() else _tabs.value.drop(idx + 1).map { it.id }
+    }
+
     /** Make [id] the active tab, if it exists. */
     fun activate(id: String) {
         if (_tabs.value.any { it.id == id }) {
