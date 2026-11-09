@@ -207,6 +207,7 @@ fun TabbedBrowserScreen(
     val browserPrefs = remember { BrowserPrefs.get(appContext) }
     val searchEngine by browserPrefs.searchEngine.collectAsState()
     val textZoom by browserPrefs.textZoom.collectAsState()
+    val recentlyClosed by tabStore.recentlyClosed.collectAsState()
     val proxyOn by LocalProxyService.isRunning.collectAsState()
     var showHistory by remember { mutableStateOf(false) }
     var showDownloads by remember { mutableStateOf(false) }
@@ -585,6 +586,8 @@ fun TabbedBrowserScreen(
             } else {
                 tabStore.activeTab()?.id?.let { destroyTab(it) }
             }
+            // Privacy: a Fire run must leave no restorable closed-tab URLs behind.
+            tabStore.clearRecentlyClosed()
             if (tabStore.count == 0 || opts.scope == FireScope.THIS_TAB) tabStore.openTab(HOME_URL)
             FireBurner.consumeEvents()
         }
@@ -817,6 +820,7 @@ fun TabbedBrowserScreen(
                     if (!menuRecon) {
                         item("New tab") { tabStore.openTab(HOME_URL) }
                         item("New private tab") { tabStore.openTab(HOME_URL, incognito = true) }
+                        item("Reopen closed tab", enabled = recentlyClosed.isNotEmpty()) { tabStore.reopenLastClosed() }
                         item("Tabs (${tabs.size})…") { showTabSwitcher = true }
                         HorizontalDivider()
                         item("History") { showHistory = true }
