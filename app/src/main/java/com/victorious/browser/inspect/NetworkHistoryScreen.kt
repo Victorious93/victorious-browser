@@ -1,6 +1,9 @@
 package com.victorious.browser.inspect
 
 import com.victorious.browser.ui.components.NeonToolHeader
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -451,13 +454,23 @@ private fun DetailView(
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
     ) {
+        val detailContext = LocalContext.current
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onBack) { Text("← List", color = NeonCyan) }
-            Button(onClick = onEditReplay) { Text("Edit & Replay") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = {
+                    val curl = CurlFormatter.toCurl(ex)
+                    val cm = detailContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    cm?.setPrimaryClip(ClipData.newPlainText("curl command", curl))
+                    Toast.makeText(detailContext, "Copied as cURL (includes credentials)", Toast.LENGTH_SHORT).show()
+                }) { Text("Copy as cURL", color = NeonCyan) }
+                Spacer(Modifier.width(8.dp))
+                Button(onClick = onEditReplay) { Text("Edit & Replay") }
+            }
         }
         Section("Request") {
             Mono("${ex.method} ${ex.url}")
