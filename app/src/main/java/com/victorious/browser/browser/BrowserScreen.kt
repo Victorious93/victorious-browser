@@ -414,7 +414,15 @@ private fun NavButton(label: String, enabled: Boolean, onClick: () -> Unit) {
  *   - looks like a host/URL (a dotted host, `localhost`, or an explicit `host:port`) → prepend `https://`
  *   - anything else (spaces, or a single bare word with no dot) → web search via [SEARCH_URL]
  */
-internal fun normalizeUrl(raw: String, searchPrefix: String = SEARCH_URL): String {
+internal fun normalizeUrl(raw: String, searchPrefix: String = SEARCH_URL): String =
+    normalizeUrlWith(raw) { q -> searchPrefix + java.net.URLEncoder.encode(q, "UTF-8") }
+
+/**
+ * Like [normalizeUrl], but a search query is turned into a URL by [buildSearch]
+ * instead of a fixed prefix — so a custom engine ([CustomSearchEngine]) with a
+ * mid-URL `%s` placeholder works, not only a trailing-prefix one.
+ */
+internal fun normalizeUrlWith(raw: String, buildSearch: (String) -> String): String {
     val trimmed = raw.trim()
     if (trimmed.isEmpty()) return HOME_URL
     // Hierarchical URL with an explicit scheme, e.g. https://… , or a known opaque
@@ -425,7 +433,7 @@ internal fun normalizeUrl(raw: String, searchPrefix: String = SEARCH_URL): Strin
     val lower = trimmed.lowercase()
     if (OPAQUE_SCHEMES.any { lower.startsWith(it) }) return trimmed
     if (looksLikeUrl(trimmed)) return "https://$trimmed"
-    return searchPrefix + java.net.URLEncoder.encode(trimmed, "UTF-8")
+    return buildSearch(trimmed)
 }
 
 private val OPAQUE_SCHEMES = listOf(

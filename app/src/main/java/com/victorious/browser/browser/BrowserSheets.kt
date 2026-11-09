@@ -369,9 +369,15 @@ internal fun LinkMenuDialog(
 @Composable
 internal fun SearchEngineDialog(
     current: SearchEngine,
+    customTemplate: String,
     onPick: (SearchEngine) -> Unit,
+    onSetCustom: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var picked by remember { mutableStateOf(current) }
+    var customInput by remember { mutableStateOf(customTemplate) }
+    val customValid = CustomSearchEngine.isValid(customInput)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Search engine") },
@@ -379,16 +385,42 @@ internal fun SearchEngineDialog(
             Column {
                 SearchEngine.entries.forEach { e ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { onPick(e) }.padding(vertical = 2.dp),
+                        Modifier.fillMaxWidth().clickable { picked = e }.padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        RadioButton(selected = e == current, onClick = { onPick(e) })
+                        RadioButton(selected = e == picked, onClick = { picked = e })
                         Text(e.label)
                     }
                 }
+                if (picked == SearchEngine.CUSTOM) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = customInput,
+                        onValueChange = { customInput = it },
+                        singleLine = true,
+                        isError = customInput.isNotBlank() && !customValid,
+                        label = { Text("Search URL template") },
+                        placeholder = { Text("https://searx.be/search?q=%s") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "Use %s where the query goes, or end with q= to append it. http(s) only.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = NeonCyan) } },
+        confirmButton = {
+            val enabled = picked != SearchEngine.CUSTOM || customValid
+            TextButton(
+                enabled = enabled,
+                onClick = {
+                    if (picked == SearchEngine.CUSTOM) onSetCustom(customInput.trim()) else onPick(picked)
+                },
+            ) { Text("Done", color = if (enabled) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
 

@@ -206,6 +206,7 @@ fun TabbedBrowserScreen(
     val downloads by downloadStore.records.collectAsState()
     val browserPrefs = remember { BrowserPrefs.get(appContext) }
     val searchEngine by browserPrefs.searchEngine.collectAsState()
+    val customSearchTemplate by browserPrefs.customSearchTemplate.collectAsState()
     val textZoom by browserPrefs.textZoom.collectAsState()
     val recentlyClosed by tabStore.recentlyClosed.collectAsState()
     val proxyOn by LocalProxyService.isRunning.collectAsState()
@@ -410,16 +411,24 @@ fun TabbedBrowserScreen(
         }
     }
 
+    // Turn address-bar input into a URL, honoring a valid custom search engine.
+    fun searchNormalize(input: String): String =
+        if (searchEngine == SearchEngine.CUSTOM && CustomSearchEngine.isValid(customSearchTemplate)) {
+            normalizeUrlWith(input) { q -> CustomSearchEngine.buildUrl(customSearchTemplate, q) ?: q }
+        } else {
+            normalizeUrl(input, searchEngine.queryPrefix)
+        }
+
     fun navigateTo(raw: String) {
         val id = activeId ?: return
-        val target = Bangs.resolve(raw) ?: normalizeUrl(raw, searchEngine.queryPrefix)
+        val target = Bangs.resolve(raw) ?: searchNormalize(raw)
         urlBarText = target
         webViews[id]?.let { urlBarText = VictoriousWebViewClient.privacyLoad(it, target, id, privacy) }
         focusManager.clearFocus()
     }
 
     fun doOpenUrl(url: String, newTab: Boolean, incognito: Boolean = activeTab?.incognito == true) {
-        val target = normalizeUrl(url, searchEngine.queryPrefix)
+        val target = searchNormalize(url)
         if (newTab || tabStore.count == 0 || activeId == null) {
             tabStore.openTab(target, incognito = incognito)
         } else {
@@ -1079,7 +1088,13 @@ fun TabbedBrowserScreen(
     if (showEngineDialog) {
         SearchEngineDialog(
             current = searchEngine,
+            customTemplate = customSearchTemplate,
             onPick = { browserPrefs.setSearchEngine(it); showEngineDialog = false },
+            onSetCustom = { template ->
+                browserPrefs.setCustomSearchTemplate(template)
+                browserPrefs.setSearchEngine(SearchEngine.CUSTOM)
+                showEngineDialog = false
+            },
             onDismiss = { showEngineDialog = false },
         )
     }
