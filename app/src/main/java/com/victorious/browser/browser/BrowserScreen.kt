@@ -82,6 +82,7 @@ fun BrowserScreen(
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     val focusManager = LocalFocusManager.current
     val appContext = LocalContext.current
+    val textZoom by BrowserPrefs.get(appContext).textZoom.collectAsState()
     val nightSettings = NightModeSettings.get(appContext)
     val nightMode by nightSettings.enabled.collectAsState()
     var readerMode by remember { mutableStateOf(false) }
@@ -206,7 +207,7 @@ fun BrowserScreen(
                     onClick = {
                         desktopUa = !desktopUa
                         webViewRef?.let { wv ->
-                            applyVictoriousWebSettings(wv, desktopUa)
+                            applyVictoriousWebSettings(wv, desktopUa, textZoom)
                             wv.reload()
                         }
                     },
@@ -333,7 +334,7 @@ fun BrowserScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
-                    applyVictoriousWebSettings(this, desktopUa)
+                    applyVictoriousWebSettings(this, desktopUa, textZoom)
                     applyNightMode(this, nightMode)
                     // Document-start injection is scoped to this WebView instance;
                     // scripts added/edited afterward need a fresh WebView (see
