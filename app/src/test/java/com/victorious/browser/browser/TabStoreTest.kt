@@ -223,4 +223,84 @@ class TabStoreTest {
         assertEquals(0, s.count)
         assertNull(s.activeTabId.value)
     }
+
+    // --- Recently-closed / reopen-closed-tab ------------------------------------
+
+    @Test
+    fun closing_a_tab_records_it_for_reopen() {
+        val s = store()
+        val a = s.openTab("https://a.example", title = "Alpha")
+        s.openTab("https://b.example")
+        assertFalse(s.hasRecentlyClosed)
+        s.closeTab(a)
+        assertTrue(s.hasRecentlyClosed)
+        assertEquals(ClosedTab("https://a.example", "Alpha"), s.recentlyClosed.value.first())
+    }
+
+    @Test
+    fun reopen_last_closed_restores_most_recent_and_activates() {
+        val s = store()
+        val a = s.openTab("https://a.example", title = "Alpha")
+        val b = s.openTab("https://b.example", title = "Beta")
+        s.closeTab(a)
+        s.closeTab(b)
+        // Most-recently-closed (b) comes back first.
+        val reopened = s.reopenLastClosed()
+        assertEquals("https://b.example", s.get(reopened!!)?.url)
+        assertEquals(reopened, s.activeTabId.value)
+        // Then a.
+        val reopened2 = s.reopenLastClosed()
+        assertEquals("https://a.example", s.get(reopened2!!)?.url)
+        assertFalse(s.hasRecentlyClosed)
+    }
+
+    @Test
+    fun reopen_with_empty_stack_returns_null() {
+        val s = store()
+        assertNull(s.reopenLastClosed())
+    }
+
+    @Test
+    fun private_tabs_are_never_recorded_for_reopen() {
+        val s = store()
+        s.openTab("https://keep.example")
+        val priv = s.openTab("https://secret.example", incognito = true)
+        s.closeTab(priv)
+        assertFalse(s.hasRecentlyClosed)
+        assertNull(s.reopenLastClosed())
+    }
+
+    @Test
+    fun recently_closed_stack_is_bounded() {
+        val s = store()
+        repeat(TabStore.MAX_RECENTLY_CLOSED + 5) { i ->
+            val id = s.openTab("https://site$i.example")
+            s.closeTab(id)
+        }
+        assertEquals(TabStore.MAX_RECENTLY_CLOSED, s.recentlyClosed.value.size)
+        // The newest close is at the top; the oldest ones were dropped.
+        assertEquals("https://site${TabStore.MAX_RECENTLY_CLOSED + 4}.example", s.recentlyClosed.value.first().url)
+    }
+
+    @Test
+    fun clear_recently_closed_forgets_everything() {
+        val s = store()
+        val a = s.openTab("https://a.example")
+        s.openTab("https://b.example")
+        s.closeTab(a)
+        assertTrue(s.hasRecentlyClosed)
+        s.clearRecentlyClosed()
+        assertFalse(s.hasRecentlyClosed)
+        assertNull(s.reopenLastClosed())
+    }
+
+    @Test
+    fun close_all_also_forgets_recently_closed() {
+        val s = store()
+        val a = s.openTab("https://a.example")
+        s.openTab("https://b.example")
+        s.closeTab(a)
+        s.closeAll()
+        assertFalse(s.hasRecentlyClosed)
+    }
 }

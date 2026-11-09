@@ -27,6 +27,9 @@ data class BrowserTab(
     val incognito: Boolean = false,
 )
 
+/** A recently-closed (non-private) tab that can be reopened. */
+data class ClosedTab(val url: String, val title: String)
+
 /**
  * StateFlow-based store for the open browser tabs and which one is active.
  *
@@ -48,6 +51,15 @@ class TabStore(
 
     private val _activeTabId = MutableStateFlow<String?>(null)
     val activeTabId: StateFlow<String?> = _activeTabId.asStateFlow()
+
+    // Recently-closed stack (most-recent first), for "reopen closed tab". Private
+    // (incognito) tabs are never recorded, and the stack is bounded + clearable so
+    // a privacy Fire run leaves nothing restorable.
+    private val _recentlyClosed = MutableStateFlow<List<ClosedTab>>(emptyList())
+    val recentlyClosed: StateFlow<List<ClosedTab>> = _recentlyClosed.asStateFlow()
+
+    /** True when at least one closed tab can be reopened. */
+    val hasRecentlyClosed: Boolean get() = _recentlyClosed.value.isNotEmpty()
 
     /** Current number of open tabs. */
     val count: Int get() = _tabs.value.size
@@ -103,9 +115,16 @@ class TabStore(
         val idx = current.indexOfFirst { it.id == id }
         if (idx < 0) return
 
+        val closed = current[idx]
         val wasActive = _activeTabId.value == id
         val remaining = current.filterNot { it.id == id }
         _tabs.value = remaining
+
+        // Record non-private closes so the user can reopen them (bounded stack).
+        if (!closed.incognito && closed.url.isNotBlank()) {
+            _recentlyClosed.value =
+                (listOf(ClosedTab(closed.url, closed.title)) + _recentlyClosed.value).take(MAX_RECENTLY_CLOSED)
+        }
 
         if (remaining.isEmpty()) {
             _activeTabId.value = null
@@ -128,10 +147,26 @@ class TabStore(
         }
     }
 
-    /** Close every tab. */
+    /**
+     * Reopen the most-recently-closed tab (if any), making it active. Returns the
+     * new tab's id, or null when the stack is empty.
+     */
+    fun reopenLastClosed(): String? {
+        val top = _recentlyClosed.value.firstOrNull() ?: return null
+        _recentlyClosed.value = _recentlyClosed.value.drop(1)
+        return openTab(top.url, title = top.title, activate = true)
+    }
+
+    /** Forget all recently-closed tabs (e.g. after a privacy Fire run). */
+    fun clearRecentlyClosed() {
+        _recentlyClosed.value = emptyList()
+    }
+
+    /** Close every tab. Also forgets recently-closed tabs. */
     fun closeAll() {
         _tabs.value = emptyList()
         _activeTabId.value = null
+        _recentlyClosed.value = emptyList()
     }
 
     fun updateUrl(id: String, url: String) = mutate(id) { it.copy(url = url) }
@@ -147,5 +182,10 @@ class TabStore(
             if (t.id == id) { changed = true; transform(t) } else t
         }
         if (changed) _tabs.value = next
+    }
+
+    companion object {
+        /** Maximum number of closed tabs retained for reopening. */
+        const val MAX_RECENTLY_CLOSED = 10
     }
 }
