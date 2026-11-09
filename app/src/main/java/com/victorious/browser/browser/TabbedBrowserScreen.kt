@@ -206,6 +206,7 @@ fun TabbedBrowserScreen(
     val downloads by downloadStore.records.collectAsState()
     val browserPrefs = remember { BrowserPrefs.get(appContext) }
     val searchEngine by browserPrefs.searchEngine.collectAsState()
+    val textZoom by browserPrefs.textZoom.collectAsState()
     val proxyOn by LocalProxyService.isRunning.collectAsState()
     var showHistory by remember { mutableStateOf(false) }
     var showDownloads by remember { mutableStateOf(false) }
@@ -316,7 +317,7 @@ fun TabbedBrowserScreen(
             )
             val privateTab = tabStore.get(tabId)?.incognito == true
             if (privateTab) SandboxManager.applyToNewWebView(this, INCOGNITO_PROFILE)
-            applyVictoriousWebSettings(this, desktopUa)
+            applyVictoriousWebSettings(this, desktopUa, textZoom)
             applyNightMode(this, nightMode)
             // Document-start user scripts, per tab (same as BrowserScreen). The
             // onPageStarted fallback in VictoriousWebViewClient covers the rest.
@@ -615,11 +616,19 @@ fun TabbedBrowserScreen(
         desktopUa = on
         val netId = NetIdSettings.get(appContext)
         webViews.values.forEach {
-            applyVictoriousWebSettings(it, on)
+            applyVictoriousWebSettings(it, on, textZoom)
             // Bug fix: re-applying settings used to drop an active Net ID UA spoof.
             SpoofInjector.applyUserAgent(it, netId.fingerprint.value)
         }
         activeId?.let { webViews[it]?.reload() }
+    }
+
+    // Page text-zoom: persist and apply live to every open tab (no reload needed —
+    // WebSettings.textZoom reflows the current page immediately).
+    fun applyTextZoom(percent: Int) {
+        browserPrefs.setTextZoom(percent)
+        val snapped = TextZoom.snap(percent)
+        webViews.values.forEach { it.settings.textZoom = snapped }
     }
 
     Column(
@@ -820,6 +829,13 @@ fun TabbedBrowserScreen(
                         item(if (desktopUa) "Desktop site: on" else "Desktop site: off") { applyDesktop(!desktopUa) }
                         item(if (readerOn) "Reader mode: on" else "Reader mode: off") { toggleReader() }
                         item(if (nightMode) "Night mode: on" else "Night mode: off") { nightSettings.setEnabled(!nightMode) }
+                        item("Zoom out  (${TextZoom.label(textZoom)})", enabled = TextZoom.canDecrease(textZoom), keepOpen = true) {
+                            applyTextZoom(TextZoom.stepDown(textZoom))
+                        }
+                        item("Zoom in  (${TextZoom.label(textZoom)})", enabled = TextZoom.canIncrease(textZoom), keepOpen = true) {
+                            applyTextZoom(TextZoom.stepUp(textZoom))
+                        }
+                        if (TextZoom.isModified(textZoom)) item("Reset text size", keepOpen = true) { applyTextZoom(TextZoom.DEFAULT) }
                         HorizontalDivider()
                         item("Fire…") { showFire = true }
                         val fp = activeHost != null && privacy.isFireproof(activeHost)

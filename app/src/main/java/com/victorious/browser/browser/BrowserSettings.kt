@@ -18,10 +18,12 @@ import com.victorious.browser.inspect.LocalProxyService
  * use that as a silent default for general browsing.
  */
 @SuppressLint("SetJavaScriptEnabled")
-fun applyVictoriousWebSettings(webView: WebView, desktopUserAgent: Boolean) {
+fun applyVictoriousWebSettings(webView: WebView, desktopUserAgent: Boolean, textZoom: Int = TextZoom.DEFAULT) {
     val settings = webView.settings
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
+    // Accessibility: page text-zoom (font scaling), snapped to a valid level.
+    settings.textZoom = TextZoom.snap(textZoom)
     settings.javaScriptCanOpenWindowsAutomatically = false
     settings.setSupportMultipleWindows(false)
     settings.loadWithOverviewMode = true
