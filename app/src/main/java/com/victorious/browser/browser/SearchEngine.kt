@@ -37,6 +37,10 @@ class BrowserPrefs private constructor(context: Context) {
     /** The user's custom search-engine template (empty until set). See [CustomSearchEngine]. */
     val customSearchTemplate: StateFlow<String> = _customSearchTemplate.asStateFlow()
 
+    private val _desktopSite = MutableStateFlow(prefs.getBoolean(KEY_DESKTOP_SITE, false))
+    /** Whether the global "Desktop site" user-agent toggle is on (persisted across restarts). */
+    val desktopSite: StateFlow<Boolean> = _desktopSite.asStateFlow()
+
     fun setSearchEngine(engine: SearchEngine) {
         _engine.value = engine
         prefs.edit().putString(KEY_ENGINE, engine.name).apply()
@@ -56,10 +60,17 @@ class BrowserPrefs private constructor(context: Context) {
         prefs.edit().putString(KEY_CUSTOM_SEARCH, t).apply()
     }
 
+    /** Persist the global "Desktop site" toggle. */
+    fun setDesktopSite(on: Boolean) {
+        _desktopSite.value = on
+        prefs.edit().putBoolean(KEY_DESKTOP_SITE, on).apply()
+    }
+
     companion object {
         private const val KEY_ENGINE = "search_engine"
         private const val KEY_TEXT_ZOOM = "text_zoom"
         private const val KEY_CUSTOM_SEARCH = "custom_search_template"
+        private const val KEY_DESKTOP_SITE = "desktop_site"
         @Volatile private var instance: BrowserPrefs? = null
         fun get(context: Context): BrowserPrefs =
             instance ?: synchronized(this) { instance ?: BrowserPrefs(context).also { instance = it } }
