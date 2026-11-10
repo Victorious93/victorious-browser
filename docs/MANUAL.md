@@ -1,6 +1,6 @@
 # Victorious Browser — In-App Manual
 
-Last updated: 2026-10-30. Authorized-testing use only. This manual is the single
+Last updated: 2026-11-09. Authorized-testing use only. This manual is the single
 source of truth for the in-app Help / Manual screen: the app bundles this file as
 an asset and renders it, so the on-device help and this document never drift.
 
@@ -25,14 +25,15 @@ Use it **only against systems you own or are explicitly authorized to test.**
 - **Secrets stay on device.** Exports and evidence strip cookies, passwords,
   proxy credentials, tokens and certs. Only public CA certificates are ever
   exported — never a private key.
-- **Branding.** Dark charcoal UI with the neon cyan → magenta brand ring.
+- **Branding.** Dark charcoal UI with the neon cyan (`#00E5FF`) → magenta (`#FF2BD6`, fleet brand) ring. Background charcoal; accent cyan `#00E5FF`.
+- **Browser-first.** The app opens straight into the tabbed browser. There is no separate home screen as the start destination. Every fleet tool (panels, proxy/HTTP history, recon, OSINT, scanner, fuzz, Metasploit, Net ID, WireGuard, Headscale, sandboxes, extensions, scripts, anti-phish, certs, evidence, export, help) is reachable from inside the browser via the brand-ring **Fleet tools** sheet, the new-tab page chips, or ⋮ → **Fleet tools…**. Tool screens open as overlays; Back returns to the live browser (tabs stay alive).
 
 ## Browser & Tabs
 
 **What it does.** A tabbed browsing shell built on the system WebView (no bundled
 Chromium). Each tab keeps its own live WebView across switches.
 
-**How to use.** Type in the address bar: anything that looks like a URL is opened,
+**How to use.** The app starts on the browser. A fresh tab shows a neon **new-tab page** (fleet tool chips + tip) instead of loading example.com; type in the address bar to leave it. Type in the address bar: anything that looks like a URL is opened,
 anything else is searched with your chosen **search engine** (DuckDuckGo by default;
 change it under ⋮ → Search engine). While typing, suggestions come from open tabs,
 bookmarks and history (picking an open tab switches to it). Go, Back, Forward and
@@ -41,9 +42,11 @@ tabs; the **tab-count** square opens the tab switcher (grid with favicon, title 
 URL; New tab, Close others, Close all). Long-press a link for Open, New tab,
 Background tab, **Preview link · embed · recon**, Copy, Share, Bookmark and Download.
 
-The **⋮ menu** holds New tab, **New private tab**, Tabs, History, Bookmarks,
+Tap the **brand ring** next to the address bar (or ⋮ → **Fleet tools…**) for the
+Tools sheet — every former launcher destination. The **⋮ menu** holds New tab,
+**New private tab**, Reopen closed tab, Close other tabs, Tabs, History, Bookmarks,
 Downloads, Find in page (next/previous match), Share/Copy link, Desktop site,
-Reader, Night and Search engine. **Recon tools ▸** opens a second page: Proxy
+Reader, Night, Zoom, Fire, Privacy and Search engine. **Recon tools ▸** opens a second page: Proxy
 history, **Send to repeater** (seeds Modify / Replay from the latest capture for
 this origin), **Cookie jar** (per-URL CookieManager inspector: edit / delete /
 export JSON, JWT decode-not-verify), **Web storage** (localStorage / sessionStorage
@@ -54,9 +57,8 @@ for this origin only), Anti-Phish, Inject (one-off JS or raw HTML), URL tools
 Screenshot → evidence, Certificate info, per-site Extensions toggle, Extensions,
 User scripts and Fleet panels. History (max 500 entries) and bookmarks are stored
 on the device and can be searched and deleted. Downloads go through Android's
-DownloadManager and are listed under Downloads. Opening Network / Anti-Phish /
-Extensions / Scripts from this menu **keeps the live WebViews composed**
-underneath so a round-trip to those tools does not destroy tab state.
+DownloadManager and are listed under Downloads. Opening any fleet tool from the Tools sheet or this menu **keeps the live WebViews composed**
+underneath so a round-trip does not destroy tab state. System Back from a tool returns to the browser.
 
 **Private tabs.** A magenta **P** badge / **PRIVATE** chip marks them. They skip
 browsing-history writes and are never written to the tab session. When the WebView
@@ -95,8 +97,9 @@ host patterns. Reader output is sanitized before re-rendering.
 **What it does.** Named, isolated browsing containers backed by the WebView
 Profile API — each sandbox has its own cookies, storage and permissions.
 
-**How to use.** Open **Sandboxes** from the launcher, pick or name a sandbox, and
-open a browser tab inside it. A profile is assigned once at WebView creation and
+**How to use.** Open **Sandboxes** from Fleet tools, pick or name a sandbox, and
+open a browser tab inside it. Long-press a link inside a sandbox browser for the same
+**Preview link · embed · recon** option as the main browser. A profile is assigned once at WebView creation and
 cannot be reassigned mid-session, so choose the sandbox when opening the tab.
 
 **Safety.** On WebViews without multi-profile support everything falls back to one
@@ -314,11 +317,11 @@ auto-enables external control. Error categories: `invalid_parameters`,
 
 ## Fleet Panels & Mesh
 
-**What it does.** The launcher lists the owner's own locally-hosted / fleet web
+**What it does.** **Fleet panels** (Fleet tools → Fleet panels) lists the owner's own locally-hosted / fleet web
 dashboards and opens them in the WebView. Mesh-flagged panels resolve and probe
 over Victorious Mesh before opening (this app holds no VpnService).
 
-**How to use.** Add / edit / delete panels from the launcher. Tap a panel to open
+**How to use.** Add / edit / delete panels from Fleet panels. Tap a panel to open
 it; mesh panels run a reachability check first and show an actionable dialog
 (Retry / Open Victorious Mesh) if the tunnel is down. Tap **Pin** to pin a panel as
 a chrome-less Lite App.
@@ -390,7 +393,10 @@ simple one-off snippets; prefer **Extensions** for real userscripts.
   **Embeddable**, **Conditional** (only listed origins, or obsolete ALLOW-FROM),
   **Not embeddable** (`'none'`, `'self'`, DENY, SAMEORIGIN, conflicting values) or
   **Unknown** (fetch failed, timed out, or a non-2xx status). An enforced CSP
-  `frame-ancestors` overrides X-Frame-Options, like current browsers.
+  `frame-ancestors` overrides X-Frame-Options, like current browsers. A
+  `<meta http-equiv=Content-Security-Policy>` in the HTML body is reported as an
+  **informational** note only — browsers do **not** enforce `frame-ancestors` (or
+  framing rules) from meta CSP; response headers remain authoritative.
 - **Copy as embed**: Markdown `[title](url)`, HTML `<a href>`, an HTML `<iframe>`
   (only when the verdict is Embeddable; otherwise you get a plain link and the
   reason the iframe was left out), and the provider's oEmbed HTML when one exists.
@@ -402,10 +408,11 @@ simple one-off snippets; prefer **Extensions** for real userscripts.
 
 **How to use.** Long-press a link → **Preview link · embed · recon**, or open
 ⋮ → Recon tools ▸ **Link preview & embed recon** for the current page. You can type
-another URL into the sheet and tap *Check URL*. Sharing text that contains a link
-to Victorious Browser (Android share sheet → Victorious Browser) opens the same
-sheet for the first http(s) link; opening an http(s) link with Victorious Browser
-opens it in a new tab.
+another URL into the sheet and tap *Check URL*. Sharing text that contains link(s) into Victorious Browser (Android share sheet →
+Victorious Browser) opens the preview sheet when there is one http(s) link, or a
+**picker** listing every safe http(s) link when there are several (nothing is
+fetched until you pick one; *Copy all* is available). Opening an http(s) link with
+Victorious Browser opens it in a new tab.
 
 **Privacy and network.** Only `http` and `https` URLs are fetched. `javascript:`,
 `data:`, `file:`, `content:`, `intent:` and every other scheme are refused, including
@@ -428,8 +435,11 @@ viewer closes. The badge shows **ISOLATED PROFILE** or **SHARED PROFILE**. Remot
 content only runs inside a sandboxed iframe in a wrapper page that has no script
 and a strict CSP. A provider `<iframe>` keeps its own origin. Any other oEmbed HTML
 runs in an opaque-origin `srcdoc` sandbox (no cookies or storage, inline scripts
-blocked). Any attempt to navigate the viewer itself is cancelled and offered as
-*Open in tab*.
+blocked). Both wrapper iframes carry `allow="fullscreen"` / `allowfullscreen` so a
+player's fullscreen control is honored via WebChromeClient custom view (system bars
+hidden; Back or the player exit leaves fullscreen). Any attempt to navigate the
+viewer itself is cancelled and offered as *Open in tab*. Fullscreen grants no extra
+privileges (still no bridges, no file access, same sandbox).
 
 **Honest limits.**
 - Verdicts are **technical signals only**, based on the headers this device saw on one
@@ -438,14 +448,15 @@ blocked). Any attempt to navigate the viewer itself is cancelled and offered as
   refuse because of referrer, cookies, region, per-video settings or JavaScript
   frame-busting.
 - Recon fetches without cookies, so pages that vary by login or region may send
-  different headers to the WebView. `<meta>` CSP and JavaScript frame-busting are not
-  evaluated.
+  different headers to the WebView. Meta CSP `frame-ancestors` is noted but not
+  treated as enforcement (per spec). JavaScript frame-busting is not evaluated.
 - Some sites serve Open Graph tags only to known crawler user agents, or put them
   beyond the first 512 KB. Built-in oEmbed endpoints cover YouTube and Vimeo;
   other providers need a discovery `<link>`.
 - Without multi-profile WebView support the viewer shares the default profile
-  (third-party cookies are still off). Fullscreen video inside the viewer is not
-  wired up. Shared text with several links previews only the first one.
+  (third-party cookies are still off). Some providers (YouTube/Vimeo) may still
+  refuse in-iframe playback or fullscreen for policy/referrer reasons — that is on
+  the provider, not missing wiring. This has not been verified on a physical device.
 
 ## Privacy protections & Fire
 

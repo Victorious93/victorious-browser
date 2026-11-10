@@ -120,7 +120,8 @@ import com.victorious.browser.browser.privacy.PrivacySettingsSheet
 import com.victorious.browser.browser.privacy.PrivacyShieldIcon
 import com.victorious.browser.browser.privacy.PrivacyStats
 
-private const val HOME_URL = "https://example.com"
+// Fresh tabs show the neon new-tab page (Compose), not example.com.
+private const val HOME_URL = NEW_TAB_URL
 
 /**
  * Multi-tab browsing host.
@@ -147,10 +148,11 @@ fun TabbedBrowserScreen(
     onOpenNetwork: () -> Unit = {},
     onOpenScripts: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
-    onBackToLauncher: (() -> Unit)? = null,
+    onOpenTool: ((String) -> Unit)? = null,
     onOpenAntiPhish: (() -> Unit)? = null,
     onSendToRepeater: (CapturedExchange?) -> Unit = {},
-    externalPreviewUrl: String? = null,
+    /** Links shared into the app (ACTION_SEND): one → preview sheet, several → picker. */
+    externalPreviewUrls: List<String>? = null,
     onExternalPreviewConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -221,6 +223,9 @@ fun TabbedBrowserScreen(
     var linkMenu by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     // Link preview / embed recon / copy-as-embed sheet target (null = closed).
     var previewUrl by remember { mutableStateOf<String?>(null) }
+    var showTools by remember { mutableStateOf(false) }
+    // Several links shared at once: picker list (stays until dismissed; hidden while a preview is open).
+    var sharedPick by remember { mutableStateOf<List<String>?>(null) }
     var urlFocused by remember { mutableStateOf(false) }
     // Per-tab TLS certificate as reported by WebView (null for http / not loaded).
     val certs = remember { mutableStateMapOf<String, SslCertificate?>() }
@@ -263,20 +268,25 @@ fun TabbedBrowserScreen(
     val activeTab = tabs.firstOrNull { it.id == activeId }
 
     // Links shared into the app (ACTION_SEND) open the preview sheet.
-    LaunchedEffect(externalPreviewUrl) {
-        val u = externalPreviewUrl ?: return@LaunchedEffect
-        previewUrl = u
+    LaunchedEffect(externalPreviewUrls) {
+        val urls = externalPreviewUrls ?: return@LaunchedEffect
+        when (val a = com.victorious.browser.linkembed.SharedLinks.actionFor(urls)) {
+            is com.victorious.browser.linkembed.SharedLinks.ShareAction.PreviewOne -> { sharedPick = null; previewUrl = a.url }
+            is com.victorious.browser.linkembed.SharedLinks.ShareAction.Pick -> { previewUrl = null; sharedPick = a.urls }
+            com.victorious.browser.linkembed.SharedLinks.ShareAction.NoLinks -> Unit
+        }
         onExternalPreviewConsumed()
     }
 
     // Keep the URL bar in sync with the active tab (follows navigation, like the
     // single-tab screen did).
+    fun displayUrl(url: String?): String = if (isNewTabUrl(url)) "" else (url ?: "")
     LaunchedEffect(activeId, activeTab?.url) {
-        if (!urlFocused) urlBarText = activeTab?.url ?: ""
+        if (!urlFocused) urlBarText = displayUrl(activeTab?.url)
     }
     LaunchedEffect(activeId) {
-        // Switching tabs always shows the new tab's URL.
-        urlBarText = activeTab?.url ?: ""
+        // Switching tabs always shows the new tab's URL (blank on the new-tab page).
+        urlBarText = displayUrl(activeTab?.url)
     }
 
     fun startDownloadImpl(url: String, ua: String?, disposition: String?, mime: String?) {
@@ -343,7 +353,9 @@ fun TabbedBrowserScreen(
             webViewClient = VictoriousWebViewClient(
                 onUrlChanged = { url ->
                     if (readerTabs.onUrlChanged(tabId, url)) readerVersion++
-                    tabStore.updateUrl(tabId, url)
+                    val keepNewTab = isNewTabUrl(tabStore.get(tabId)?.url) &&
+                        (url.equals("about:blank", ignoreCase = true) || url.isBlank())
+                    if (!keepNewTab) tabStore.updateUrl(tabId, url)
                     tabStore.updateNav(tabId, canGoBack(), canGoForward())
                 },
                 onLoadingChanged = { loading ->
@@ -353,7 +365,8 @@ fun TabbedBrowserScreen(
                         certs[tabId] = certificate
                         val u = url.orEmpty()
                         val skipHistory = readerTabs.isActive(tabId) ||
-                            tabStore.get(tabId)?.incognito == true
+                            tabStore.get(tabId)?.incognito == true ||
+                            isNewTabUrl(u) || u.equals("about:blank", ignoreCase = true)
                         if (!skipHistory) historyStore.record(u, title.orEmpty())
                     }
                 },
@@ -402,7 +415,8 @@ fun TabbedBrowserScreen(
                     else -> false // let WebView handle text selection etc.
                 }
             }
-            VictoriousWebViewClient.privacyLoad(this, initialUrl, tabId, privacy)
+            val loadUrl = if (isNewTabUrl(initialUrl)) "about:blank" else initialUrl
+            VictoriousWebViewClient.privacyLoad(this, loadUrl, tabId, privacy)
         }
 
     fun destroyTab(id: String) {
@@ -499,7 +513,7 @@ fun TabbedBrowserScreen(
         Toast.makeText(appContext, toast, Toast.LENGTH_SHORT).show()
     }
 
-    fun currentUrl(): String = activeTab?.url?.takeIf { it.isNotBlank() } ?: urlBarText
+    fun currentUrl(): String = activeTab?.url?.takeIf { it.isNotBlank() && !isNewTabUrl(it) } ?: urlBarText
 
     fun shareUrl() {
         val url = currentUrl()
@@ -624,14 +638,15 @@ fun TabbedBrowserScreen(
         }
     }
 
-    // Back priority: close find bar → dismiss address-bar editing → page back → launcher.
-    BackHandler(enabled = showFind || urlFocused || (activeTab?.canGoBack == true) || onBackToLauncher != null) {
+    // Back priority: close find/tools → dismiss address-bar editing → page back.
+    // The browser IS the home screen, so Back never leaves the app from here.
+    BackHandler(enabled = showTools || showFind || urlFocused || (activeTab?.canGoBack == true)) {
         val id = activeId
         when {
+            showTools -> showTools = false
             showFind -> closeFind()
             urlFocused -> focusManager.clearFocus()
             id != null && webViews[id]?.canGoBack() == true -> webViews[id]?.goBack()
-            else -> onBackToLauncher?.invoke()
         }
     }
 
@@ -677,17 +692,15 @@ fun TabbedBrowserScreen(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (onBackToLauncher != null) {
-                Box(
-                    Modifier
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .clickable(onClick = onBackToLauncher)
-                        .padding(4.dp),
-                ) {
-                    com.victorious.browser.ui.components.BrandRing(size = 30.dp, strokeWidth = 3.dp, glow = false)
-                }
-                Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable(onClick = { showTools = true })
+                    .padding(4.dp),
+            ) {
+                com.victorious.browser.ui.components.BrandRing(size = 30.dp, strokeWidth = 3.dp, glow = false)
             }
+            Spacer(Modifier.width(6.dp))
             OutlinedTextField(
                 value = urlBarText,
                 onValueChange = { urlBarText = it },
@@ -873,7 +886,7 @@ fun TabbedBrowserScreen(
                         HorizontalDivider()
                         item("Recon tools ▸", keepOpen = true) { menuRecon = true }
                         item("Search engine: ${searchEngine.label}") { showEngineDialog = true }
-                        if (onBackToLauncher != null) item("All tools (launcher)") { onBackToLauncher() }
+                        item("Fleet tools…") { showTools = true }
                     } else {
                         item("◂ Back", keepOpen = true) { menuRecon = false }
                         HorizontalDivider()
@@ -981,36 +994,55 @@ fun TabbedBrowserScreen(
 
         // WebView host: a single container; we attach the active tab's WebView and
         // keep inactive ones alive (detached) so their state is preserved.
-        AndroidView(
-            factory = { ctx ->
-                FrameLayout(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    )
-                }
-            },
-            update = { container ->
-                val id = activeId
-                if (id == null) {
-                    container.removeAllViews()
-                    return@AndroidView
-                }
-                val wv = webViews.getOrPut(id) {
-                    buildWebView(id, tabStore.get(id)?.url ?: HOME_URL)
-                }
-                // Night mode is a global toggle: keep every live tab in sync.
-                webViews.values.forEach { applyNightMode(it, nightMode) }
-                val current = container.getChildAt(0)
-                if (current !== wv) {
-                    (wv.parent as? ViewGroup)?.removeView(wv)
-                    container.removeAllViews()
-                    container.addView(wv)
-                }
-            },
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
                 .weight(1f),
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    FrameLayout(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                    }
+                },
+                update = { container ->
+                    val id = activeId
+                    if (id == null) {
+                        container.removeAllViews()
+                        return@AndroidView
+                    }
+                    val wv = webViews.getOrPut(id) {
+                        buildWebView(id, tabStore.get(id)?.url ?: HOME_URL)
+                    }
+                    // Night mode is a global toggle: keep every live tab in sync.
+                    webViews.values.forEach { applyNightMode(it, nightMode) }
+                    val current = container.getChildAt(0)
+                    if (current !== wv) {
+                        (wv.parent as? ViewGroup)?.removeView(wv)
+                        container.removeAllViews()
+                        container.addView(wv)
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (isNewTabUrl(activeTab?.url)) {
+                NewTabPage(
+                    isPrivate = activeTab?.incognito == true,
+                    onOpenTool = { id -> onOpenTool?.invoke(id) },
+                    onShowAllTools = { showTools = true },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+
+    if (showTools) {
+        ToolsSheet(
+            onOpen = { id -> onOpenTool?.invoke(id) },
+            onDismiss = { showTools = false },
         )
     }
 
@@ -1138,13 +1170,24 @@ fun TabbedBrowserScreen(
         )
     }
 
+    val pickList = sharedPick
+    if (pickList != null && previewUrl == null) {
+        com.victorious.browser.linkembed.SharedLinkPickerDialog(
+            urls = pickList,
+            onPick = { previewUrl = it },
+            onCopyAll = { copyText(pickList.joinToString("\n"), "Copied ${pickList.size} links") },
+            onDismiss = { sharedPick = null },
+        )
+    }
+
     previewUrl?.let { target ->
         com.victorious.browser.linkembed.LinkPreviewSheet(
             initialUrl = target,
             isPrivate = activeTab?.incognito == true,
             onDismiss = { previewUrl = null },
-            onOpen = { u -> doOpenUrl(u, newTab = false) },
-            onOpenNewTab = { u -> doOpenUrl(u, newTab = true) },
+            // Opening a link leaves the share flow; closing the sheet returns to the picker.
+            onOpen = { u -> sharedPick = null; doOpenUrl(u, newTab = false) },
+            onOpenNewTab = { u -> sharedPick = null; doOpenUrl(u, newTab = true) },
             onCopy = { text, toast -> copyText(text, toast) },
         )
     }

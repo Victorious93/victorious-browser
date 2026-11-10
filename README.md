@@ -689,7 +689,7 @@ Release signing is left to CI secrets — no release key is committed.
 
 ## Brand
 
-Dark charcoal UI with neon cyan (`#00E5FF`) → magenta (`#FF00E5`) accent ring theme,
+Dark charcoal UI with neon cyan (`#00E5FF`) → magenta (`#FF2BD6`, fleet brand) accent ring theme,
 plus an opt-in light variant (same accent hues, darkened for contrast on a light
 background). `VictoriousBrowserTheme(darkTheme: Boolean)` (`ui/theme/Theme.kt`)
 switches between the two `MaterialTheme` color schemes; the choice is a persisted

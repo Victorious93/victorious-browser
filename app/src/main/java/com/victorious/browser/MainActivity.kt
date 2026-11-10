@@ -57,7 +57,7 @@ import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
     private val pendingOpenUrl = mutableStateOf<String?>(null)
-    private val pendingPreviewUrl = mutableStateOf<String?>(null)
+    private val pendingPreviewUrls = mutableStateOf<List<String>?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,8 +73,8 @@ class MainActivity : ComponentActivity() {
                 VictoriousBrowserApp(
                     pendingOpenUrl = pendingOpenUrl.value,
                     onPendingConsumed = { pendingOpenUrl.value = null },
-                    pendingPreviewUrl = pendingPreviewUrl.value,
-                    onPreviewConsumed = { pendingPreviewUrl.value = null },
+                    pendingPreviewUrls = pendingPreviewUrls.value,
+                    onPreviewConsumed = { pendingPreviewUrls.value = null },
                 )
             }
         }
@@ -131,12 +131,7 @@ class MainActivity : ComponentActivity() {
                 )
                 when {
                     urls.isEmpty() -> Toast.makeText(this, "No http(s) link found in the shared text", Toast.LENGTH_SHORT).show()
-                    else -> {
-                        if (urls.size > 1) {
-                            Toast.makeText(this, "${urls.size} links shared; previewing the first", Toast.LENGTH_SHORT).show()
-                        }
-                        pendingPreviewUrl.value = urls.first()
-                    }
+                    else -> pendingPreviewUrls.value = urls
                 }
             }
         }
@@ -147,7 +142,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private sealed class AppDestination {
+internal sealed class AppDestination {
     data object Launcher : AppDestination()
     data object Home : AppDestination()
     data object Browser : AppDestination()
@@ -176,23 +171,29 @@ private sealed class AppDestination {
 fun VictoriousBrowserApp(
     pendingOpenUrl: String? = null,
     onPendingConsumed: () -> Unit = {},
-    pendingPreviewUrl: String? = null,
+    pendingPreviewUrls: List<String>? = null,
     onPreviewConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    var destination by remember { mutableStateOf<AppDestination>(AppDestination.Launcher) }
+    // Browser-first: the tabbed browser is the start destination. Fleet tools open as
+    // overlays from inside the browser and always return to it (no separate home screen).
+    var destination by remember { mutableStateOf<AppDestination>(AppDestination.Browser) }
     val tabStore = remember {
         TabStore().also { TabSessionStore.get(context).restoreInto(it) }
     }
-    // Tools opened from the browser's ⋮ menu return to the browser, not the launcher.
-    var returnToBrowser by remember { mutableStateOf(false) }
+    // Tools opened from the browser always return to the browser.
+    var returnToBrowser by remember { mutableStateOf(true) }
     var replaySeed by remember { mutableStateOf<CapturedExchange?>(null) }
     var startRepeater by remember { mutableStateOf(false) }
     fun backFromTool() {
-        destination = if (returnToBrowser) AppDestination.Browser else AppDestination.Launcher
-        returnToBrowser = false
+        destination = AppDestination.Browser
+        returnToBrowser = true
         replaySeed = null
         startRepeater = false
+    }
+    fun openTool(dest: AppDestination) {
+        returnToBrowser = true
+        destination = dest
     }
 
     fun openUrl(url: String) {
@@ -210,11 +211,11 @@ fun VictoriousBrowserApp(
             }
         }
     }
-    // Shared-in link (ACTION_SEND): show the browser and hand the URL to its preview sheet.
-    var browserPreviewUrl by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(pendingPreviewUrl) {
-        val url = pendingPreviewUrl ?: return@LaunchedEffect
-        browserPreviewUrl = url
+    // Shared-in link(s) (ACTION_SEND): show the browser and hand them to its preview / picker.
+    var browserPreviewUrls by remember { mutableStateOf<List<String>?>(null) }
+    LaunchedEffect(pendingPreviewUrls) {
+        val urls = pendingPreviewUrls ?: return@LaunchedEffect
+        browserPreviewUrls = urls
         destination = AppDestination.Browser
         onPreviewConsumed()
     }
@@ -232,25 +233,24 @@ fun VictoriousBrowserApp(
             .fillMaxSize()
             .padding(innerPadding)
         val dest = destination
-        val keepBrowser =
-            dest == AppDestination.Browser || (returnToBrowser && dest != AppDestination.Launcher)
+        // Keep the browser alive under every tool overlay so tabs / WebViews survive.
+        val keepBrowser = true
         Box(Modifier.fillMaxSize()) {
         if (keepBrowser) {
             TabbedBrowserScreen(
                 tabStore = tabStore,
                 modifier = pad,
-                onOpenNetwork = { returnToBrowser = true; destination = AppDestination.Network },
-                onOpenScripts = { returnToBrowser = true; destination = AppDestination.Scripts },
-                onOpenExtensions = { returnToBrowser = true; destination = AppDestination.Extensions },
-                onBackToLauncher = { destination = AppDestination.Launcher },
-                onOpenAntiPhish = { returnToBrowser = true; destination = AppDestination.AntiPhish },
-                externalPreviewUrl = browserPreviewUrl,
-                onExternalPreviewConsumed = { browserPreviewUrl = null },
+                onOpenNetwork = { openTool(AppDestination.Network) },
+                onOpenScripts = { openTool(AppDestination.Scripts) },
+                onOpenExtensions = { openTool(AppDestination.Extensions) },
+                onOpenTool = { id -> openTool(toolDestination(id)) },
+                onOpenAntiPhish = { openTool(AppDestination.AntiPhish) },
+                externalPreviewUrls = browserPreviewUrls,
+                onExternalPreviewConsumed = { browserPreviewUrls = null },
                 onSendToRepeater = { seed ->
                     replaySeed = seed
                     startRepeater = true
-                    returnToBrowser = true
-                    destination = AppDestination.Network
+                    openTool(AppDestination.Network)
                 },
             )
         }
@@ -261,87 +261,88 @@ fun VictoriousBrowserApp(
             AppDestination.Launcher -> FleetPanelScreen(
                 modifier = pad,
                 onOpenPanel = { panel -> openUrl(panel.url) },
-                onOpenNetwork = { destination = AppDestination.Network },
-                onOpenBrowser = { destination = AppDestination.Browser },
-                onOpenFleetControl = { destination = AppDestination.FleetControl },
-                onOpenRecon = { destination = AppDestination.Recon },
-                onOpenSandboxes = { destination = AppDestination.Sandboxes },
-                onOpenOsint = { destination = AppDestination.Osint },
-                onOpenScanner = { destination = AppDestination.Scanner },
-                onOpenNetId = { destination = AppDestination.NetId },
-                onOpenFuzz = { destination = AppDestination.Fuzz },
-                onOpenExport = { destination = AppDestination.Export },
-                onOpenMsf = { destination = AppDestination.Msf },
-                onOpenCerts = { destination = AppDestination.Certs },
-                onOpenEvidence = { destination = AppDestination.Evidence },
-                onOpenAntiPhish = { destination = AppDestination.AntiPhish },
-                onOpenHome = { destination = AppDestination.Home },
-                onOpenHelp = { destination = AppDestination.Help },
-                onOpenExtensions = { destination = AppDestination.Extensions },
-                onOpenWireGuard = { destination = AppDestination.WireGuard },
-                onOpenHeadscale = { destination = AppDestination.Headscale },
+                onOpenNetwork = { openTool(AppDestination.Network) },
+                onOpenBrowser = { backFromTool() },
+                onOpenFleetControl = { openTool(AppDestination.FleetControl) },
+                onOpenRecon = { openTool(AppDestination.Recon) },
+                onOpenSandboxes = { openTool(AppDestination.Sandboxes) },
+                onOpenOsint = { openTool(AppDestination.Osint) },
+                onOpenScanner = { openTool(AppDestination.Scanner) },
+                onOpenNetId = { openTool(AppDestination.NetId) },
+                onOpenFuzz = { openTool(AppDestination.Fuzz) },
+                onOpenExport = { openTool(AppDestination.Export) },
+                onOpenMsf = { openTool(AppDestination.Msf) },
+                onOpenCerts = { openTool(AppDestination.Certs) },
+                onOpenEvidence = { openTool(AppDestination.Evidence) },
+                onOpenAntiPhish = { openTool(AppDestination.AntiPhish) },
+                onOpenHome = { openTool(AppDestination.Home) },
+                onOpenHelp = { openTool(AppDestination.Help) },
+                onOpenExtensions = { openTool(AppDestination.Extensions) },
+                onOpenWireGuard = { openTool(AppDestination.WireGuard) },
+                onOpenHeadscale = { openTool(AppDestination.Headscale) },
+                onBack = { backFromTool() },
             )
             AppDestination.Home -> HomeScreen(
                 modifier = pad,
                 onOpenUrl = { url -> openUrl(url) },
-                onOpenPanels = { destination = AppDestination.Launcher },
-                onOpenBrowser = { destination = AppDestination.Browser },
-                onOpenRecon = { destination = AppDestination.Recon },
-                onOpenOsint = { destination = AppDestination.Osint },
-                onOpenScanner = { destination = AppDestination.Scanner },
+                onOpenPanels = { openTool(AppDestination.Launcher) },
+                onOpenBrowser = { backFromTool() },
+                onOpenRecon = { openTool(AppDestination.Recon) },
+                onOpenOsint = { openTool(AppDestination.Osint) },
+                onOpenScanner = { openTool(AppDestination.Scanner) },
             )
             AppDestination.Network -> NetworkHistoryScreen(
                 modifier = pad,
                 onBack = { backFromTool() },
-                onSendToFleet = { destination = AppDestination.Export },
+                onSendToFleet = { openTool(AppDestination.Export) },
                 initialReplay = replaySeed,
                 startInRepeater = startRepeater,
             )
             AppDestination.FleetControl -> FleetControlScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Recon -> ReconWorkbenchScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
-                onOpenOsint = { destination = AppDestination.Osint },
+                onBack = { backFromTool() },
+                onOpenOsint = { openTool(AppDestination.Osint) },
             )
             AppDestination.Osint -> OsintScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
                 onOpenUrl = { url -> openUrl(url) },
             )
             AppDestination.Scanner -> ScannerScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
                 onSendToFleet = { findings ->
                     FleetExportStaging.stage(findings = findings)
-                    destination = AppDestination.Export
+                    openTool(AppDestination.Export)
                 },
             )
             AppDestination.NetId -> NetIdScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Fuzz -> FuzzScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Export -> ExportScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Msf -> MsfConsoleScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Certs -> CertScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Evidence -> EvidenceScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.AntiPhish -> AntiPhishScreen(
                 modifier = pad,
@@ -349,7 +350,7 @@ fun VictoriousBrowserApp(
             )
             AppDestination.Help -> HelpScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Extensions -> ExtensionsScreen(
                 modifier = pad,
@@ -363,31 +364,57 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 initialUrl = dest.url,
                 sandboxName = dest.sandbox,
-                onOpenNetwork = { destination = AppDestination.Network },
-                onOpenScripts = { destination = AppDestination.Scripts },
-                onBackToLauncher = { destination = AppDestination.Launcher },
-                onOpenAntiPhish = { destination = AppDestination.AntiPhish },
+                onOpenNetwork = { openTool(AppDestination.Network) },
+                onOpenScripts = { openTool(AppDestination.Scripts) },
+                onBackToLauncher = { backFromTool() },
+                onOpenAntiPhish = { openTool(AppDestination.AntiPhish) },
             )
             AppDestination.Sandboxes -> SandboxesScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
                 onOpenSandbox = { name ->
-                    destination = AppDestination.SandboxBrowser(url = "https://example.com", sandbox = name)
+                    openTool(AppDestination.SandboxBrowser(url = "https://example.com", sandbox = name))
                 },
             )
             AppDestination.WireGuard -> WireGuardScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
             AppDestination.Headscale -> HeadscaleScreen(
                 modifier = pad,
-                onBack = { destination = AppDestination.Launcher },
+                onBack = { backFromTool() },
             )
         }
         }
         }
         }
     }
+}
+
+
+/** Maps a Tools-sheet id to an [AppDestination]. Pure so it is unit-tested. Unknown → null. */
+internal fun toolDestination(id: String): AppDestination = when (id) {
+    "panels" -> AppDestination.Launcher
+    "home" -> AppDestination.Home
+    "network" -> AppDestination.Network
+    "fleet" -> AppDestination.FleetControl
+    "recon" -> AppDestination.Recon
+    "scripts" -> AppDestination.Scripts
+    "extensions" -> AppDestination.Extensions
+    "sandboxes" -> AppDestination.Sandboxes
+    "osint" -> AppDestination.Osint
+    "scanner" -> AppDestination.Scanner
+    "netid" -> AppDestination.NetId
+    "fuzz" -> AppDestination.Fuzz
+    "export" -> AppDestination.Export
+    "msf" -> AppDestination.Msf
+    "certs" -> AppDestination.Certs
+    "evidence" -> AppDestination.Evidence
+    "antiphish" -> AppDestination.AntiPhish
+    "help" -> AppDestination.Help
+    "wireguard" -> AppDestination.WireGuard
+    "headscale" -> AppDestination.Headscale
+    else -> AppDestination.Browser
 }
 
 @Preview(showBackground = true)

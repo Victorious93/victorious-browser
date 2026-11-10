@@ -110,7 +110,7 @@ class LinkPreviewService(
         }
         val start = (safe as UrlSafety.Result.Ok).url
         val page = fetcher.fetch(start, baseHeaders + ("Accept" to "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5"), MAX_PAGE_BYTES)
-        val recon = EmbedRecon.evaluate(start, page.finalUrl, page.status, page.headers, page.redirects, page.error)
+        var recon = EmbedRecon.evaluate(start, page.finalUrl, page.status, page.headers, page.redirects, page.error)
         val finalUrl = page.finalUrl ?: start
         val ct = page.contentType?.lowercase().orEmpty()
 
@@ -127,6 +127,7 @@ class LinkPreviewService(
             else -> LinkMetadata(url = finalUrl)
         }
 
+        if (meta?.metaCsp?.isNotEmpty() == true) recon = EmbedRecon.withMetaCspNotes(recon, meta.metaCsp)
         val oembed = if (page.ok) loadOEmbed(meta?.oembedUrl ?: OEmbed.knownEndpoint(finalUrl) ?: OEmbed.knownEndpoint(start)) else null
 
         val candidate = oembed?.photoUrl ?: meta?.imageUrl ?: oembed?.thumbnailUrl

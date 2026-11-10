@@ -1,7 +1,15 @@
 package com.victorious.browser.linkembed
 
 import android.annotation.SuppressLint
+import android.view.View
 import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
@@ -63,7 +71,10 @@ private val ViewerBg = Color(0xFF0B0F1A)
  *  - every main-frame navigation away from the wrapper is cancelled and offered as
  *    "Open in tab" instead — the viewer never silently becomes a browser;
  *  - non-http(s) sub-resource requests (file:, content:, intent:…) are refused;
- *  - remote content only ever runs inside the sandboxed iframe built by [EmbedViewerHtml].
+ *  - remote content only ever runs inside the sandboxed iframe built by [EmbedViewerHtml];
+ *  - HTML5 fullscreen (a player's ⛶ button) is honored via onShowCustomView: the custom
+ *    view is shown over the viewer with system bars hidden; Back or the player's own
+ *    exit leaves fullscreen. It is the same sandboxed content, just bigger.
  * The process-wide proxy override (local inspection proxy) applies here like any WebView.
  */
 @Composable
@@ -76,7 +87,31 @@ fun EmbedViewerDialog(
 ) {
     var blockedNav by remember { mutableStateOf<String?>(null) }
     val isolated = remember { SandboxManager.isSupported() }
+    // HTML5 fullscreen (custom view) state; fsView mirrors the session for recomposition.
+    var fsView by remember { mutableStateOf<View?>(null) }
+    val fullscreen = remember {
+        FullscreenSession<View, WebChromeClient.CustomViewCallback> { cb -> runCatching { cb.onCustomViewHidden() } }
+    }
+    fun exitFullscreen() { fullscreen.exit(); fsView = null }
+    DisposableEffect(Unit) { onDispose { fullscreen.exit() } }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        val dialogView = LocalView.current
+        DisposableEffect(fsView != null) {
+            val w = dialogWindow
+            if (w != null) {
+                val ctl = WindowCompat.getInsetsController(w, dialogView)
+                if (fsView != null) {
+                    ctl.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    ctl.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    ctl.show(WindowInsetsCompat.Type.systemBars())
+                }
+            }
+            onDispose { if (w != null) WindowCompat.getInsetsController(w, dialogView).show(WindowInsetsCompat.Type.systemBars()) }
+        }
+        BackHandler(enabled = fsView != null) { exitFullscreen() }
+        Box(Modifier.fillMaxSize().background(ViewerBg)) {
         Column(Modifier.fillMaxSize().background(ViewerBg)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -112,7 +147,13 @@ fun EmbedViewerDialog(
                     NeonButton("Open as a normal tab", onClick = { onOpenInTab(pageUrl) })
                 }
             } else {
-                SandboxedWebView(doc, onBlockedNavigation = { blockedNav = it }, modifier = Modifier.fillMaxWidth().weight(1f))
+                SandboxedWebView(
+                    doc,
+                    onBlockedNavigation = { blockedNav = it },
+                    onEnterFullscreen = { view, cb -> if (fullscreen.enter(view, cb)) fsView = view },
+                    onPageExitedFullscreen = { fullscreen.onHiddenByPage(); fsView = null },
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
                 Text(
                     if (plan is EmbedViewerHtml.Plan.ProviderHtml) {
                         "Provider HTML runs in an opaque-origin sandbox (no cookies/storage). Inline scripts are blocked; some widgets may not render."
@@ -125,12 +166,27 @@ fun EmbedViewerDialog(
                 )
             }
         }
+        fsView?.let { v ->
+            androidx.compose.runtime.key(v) {
+                AndroidView(
+                    factory = { (v.parent as? ViewGroup)?.removeView(v); v },
+                    modifier = Modifier.fillMaxSize().background(Color.Black),
+                )
+            }
+        }
+        }
     }
 }
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun SandboxedWebView(document: String, onBlockedNavigation: (String) -> Unit, modifier: Modifier) {
+private fun SandboxedWebView(
+    document: String,
+    onBlockedNavigation: (String) -> Unit,
+    onEnterFullscreen: (View, WebChromeClient.CustomViewCallback) -> Unit,
+    onPageExitedFullscreen: () -> Unit,
+    modifier: Modifier,
+) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     DisposableEffect(Unit) {
         onDispose {
@@ -177,6 +233,12 @@ private fun SandboxedWebView(document: String, onBlockedNavigation: (String) -> 
                     override fun onGeolocationPermissionsShowPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
                         callback?.invoke(origin, false, false)
                     }
+                    // HTML5 fullscreen from inside the sandboxed iframe (allow="fullscreen").
+                    override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                        if (view == null || callback == null) { callback?.onCustomViewHidden(); return }
+                        onEnterFullscreen(view, callback)
+                    }
+                    override fun onHideCustomView() = onPageExitedFullscreen()
                 }
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {

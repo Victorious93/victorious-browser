@@ -14,6 +14,10 @@ package com.victorious.browser.linkembed
  *    iframe with `allow-scripts allow-popups` but WITHOUT `allow-same-origin`, so it
  *    runs in an opaque origin with no storage or cookies.
  * Pages that are not embeddable are never framed; the viewer says so and offers a tab.
+ *
+ * Both iframes carry `allow="fullscreen"` + `allowfullscreen` so a player's fullscreen
+ * button reaches WebChromeClient.onShowCustomView (handled by [EmbedViewerDialog]).
+ * Fullscreen grants no extra privileges: no storage, no top navigation, no bridges.
  */
 object EmbedViewerHtml {
     const val BASE_URL = "https://embed-viewer.victorious.invalid/"
@@ -57,10 +61,11 @@ object EmbedViewerHtml {
             is Plan.FrameUrl ->
                 "<iframe src=\"${EmbedSnippets.escapeHtml(plan.src)}\" title=\"${EmbedSnippets.escapeHtml(title)}\" " +
                     "sandbox=\"allow-scripts allow-same-origin allow-presentation allow-popups\" " +
-                    "allow=\"encrypted-media; picture-in-picture\" referrerpolicy=\"strict-origin-when-cross-origin\"></iframe>"
+                    "allow=\"encrypted-media; picture-in-picture; fullscreen\" allowfullscreen " +
+                    "referrerpolicy=\"strict-origin-when-cross-origin\"></iframe>"
             is Plan.ProviderHtml ->
                 "<iframe srcdoc=\"${EmbedSnippets.escapeHtml(providerDoc(plan.html))}\" title=\"${EmbedSnippets.escapeHtml(title)}\" " +
-                    "sandbox=\"allow-scripts allow-popups\" referrerpolicy=\"no-referrer\"></iframe>"
+                    "sandbox=\"allow-scripts allow-popups\" allow=\"fullscreen\" allowfullscreen referrerpolicy=\"no-referrer\"></iframe>"
             is Plan.NotEmbeddable -> return null
         }
         return "<!doctype html><html><head><meta charset=\"utf-8\">" +

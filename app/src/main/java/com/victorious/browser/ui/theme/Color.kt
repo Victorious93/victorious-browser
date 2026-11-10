@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
 
 // Accents (the ring gradient stops)
 val NeonCyan = Color(0xFF00E5FF)
-val NeonMagenta = Color(0xFFFF00E5)
+val NeonMagenta = Color(0xFFFF2BD6) // fleet brand magenta
 val NeonViolet = Color(0xFF8A5BFF) // mid-gradient blend, used for focus/links
 
 // Charcoal base ramp (darkest → elevated)

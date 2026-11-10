@@ -15,6 +15,12 @@ data class LinkMetadata(
     val oembedUrl: String? = null,
     /** Which source supplied the title: "og", "twitter", "title", or "url". */
     val titleSource: String = "url",
+    /**
+     * Content of `<meta http-equiv="Content-Security-Policy" content="…">` tags found in
+     * the document (first-wins order). Informational only — browsers do NOT enforce
+     * `frame-ancestors` from a meta CSP (headers are authoritative).
+     */
+    val metaCsp: List<String> = emptyList(),
 )
 
 /**
@@ -41,6 +47,7 @@ object HtmlMetadataParser {
         var appleIcon: String? = null
         var canonical: String? = null
         var oembed: String? = null
+        val metaCsp = mutableListOf<String>()
 
         var i = 0
         val n = html.length
@@ -69,8 +76,14 @@ object HtmlMetadataParser {
                 }
                 "base" -> if (baseHref == null) baseHref = tag.attrs["href"]
                 "meta" -> {
-                    val key = (tag.attrs["property"] ?: tag.attrs["name"] ?: tag.attrs["itemprop"])?.trim()?.lowercase()
+                    val httpEquiv = tag.attrs["http-equiv"]?.trim()
                     val content = tag.attrs["content"]
+                    if (httpEquiv != null && content != null &&
+                        httpEquiv.equals("Content-Security-Policy", ignoreCase = true)
+                    ) {
+                        metaCsp += content.trim()
+                    }
+                    val key = (tag.attrs["property"] ?: tag.attrs["name"] ?: tag.attrs["itemprop"])?.trim()?.lowercase()
                     if (key != null && content != null && key !in meta) meta[key] = content
                 }
                 "link" -> {
@@ -118,6 +131,7 @@ object HtmlMetadataParser {
             type = txt(meta["og:type"], 60) ?: txt(meta["twitter:card"], 60),
             oembedUrl = abs(oembed),
             titleSource = source,
+            metaCsp = metaCsp.toList(),
         )
     }
 

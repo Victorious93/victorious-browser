@@ -19,7 +19,7 @@ object Brand {
     /** ARGB ints for the ring stops — kept as ints so the math is trivially testable. */
     const val CYAN_ARGB = 0xFF00E5FF.toInt()
     const val VIOLET_ARGB = 0xFF8A5BFF.toInt()
-    const val MAGENTA_ARGB = 0xFFFF00E5.toInt()
+    const val MAGENTA_ARGB = 0xFFFF2BD6.toInt()
 
     /** Ordered gradient stops used for the ring, borders and accents. */
     val stops: List<Color> = listOf(cyan, violet, magenta)

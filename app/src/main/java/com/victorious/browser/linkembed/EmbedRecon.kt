@@ -156,6 +156,29 @@ object EmbedRecon {
         return r.copy(reasons = reasons.toList())
     }
 
+
+    /**
+     * Appends an honest informational note when the HTML body advertised a meta
+     * `http-equiv=Content-Security-Policy`. Per the HTML / CSP specs, `frame-ancestors`
+     * (and framing in general) is ONLY enforced from HTTP response headers — a meta
+     * CSP is ignored for framing. We still surface it so the user can see what the
+     * page claims. Does not change the verdict.
+     */
+    fun withMetaCspNotes(report: Report, metaCspPolicies: List<String>): Report {
+        if (metaCspPolicies.isEmpty()) return report
+        val notes = metaCspPolicies.map { policy ->
+            val fa = frameAncestorsOf(policy)
+            if (fa != null) {
+                "Informational: HTML <meta http-equiv=Content-Security-Policy> also declares frame-ancestors ($fa). " +
+                    "Browsers ignore frame-ancestors (and framing rules) from meta CSP — only response headers are enforced."
+            } else {
+                "Informational: HTML <meta http-equiv=Content-Security-Policy> is present, but it has no frame-ancestors " +
+                    "directive. Framing is decided by response headers only."
+            }
+        }
+        return report.copy(reasons = report.reasons + notes)
+    }
+
     /** The `frame-ancestors` directive value from one CSP header line (multiple policies may be comma-joined). */
     fun frameAncestorsOf(cspHeader: String): String? {
         // A single header line may carry several comma-separated policies; each is enforced.

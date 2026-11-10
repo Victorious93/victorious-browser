@@ -104,6 +104,8 @@ fun FleetPanelScreen(
     onOpenExtensions: () -> Unit = {},
     onOpenWireGuard: () -> Unit = {},
     onOpenHeadscale: () -> Unit = {},
+    /** When set (browser-first nav), shows a Back → browser chip in the hero. */
+    onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -275,6 +277,14 @@ fun FleetPanelScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (onBack != null) {
+                            com.victorious.browser.ui.components.QuickAction(
+                                "← Browser",
+                                Icons.Filled.Home,
+                                NeonCyan,
+                                onClick = onBack,
+                            )
+                        }
                         com.victorious.browser.ui.components.QuickAction(
                             "Home",
                             Icons.Filled.Home,
