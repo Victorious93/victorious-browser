@@ -1480,16 +1480,6 @@ fun TabbedBrowserScreen(
         )
     }
 
-    val pickList = sharedPick
-    if (pickList != null && previewUrl == null) {
-        com.victorious.browser.linkembed.SharedLinkPickerDialog(
-            urls = pickList,
-            onPick = { previewUrl = it },
-            onCopyAll = { copyText(pickList.joinToString("\n"), "Copied ${pickList.size} links") },
-            onDismiss = { sharedPick = null },
-        )
-    }
-
     previewUrl?.let { target ->
         com.victorious.browser.linkembed.LinkPreviewSheet(
             initialUrl = target,
