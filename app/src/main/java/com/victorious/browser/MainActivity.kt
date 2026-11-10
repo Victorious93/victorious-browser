@@ -1,6 +1,7 @@
 package com.victorious.browser
 
 import android.content.Intent
+import android.widget.Toast
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,6 +29,7 @@ import com.victorious.browser.browser.TabSessionStore
 import com.victorious.browser.browser.TabStore
 import com.victorious.browser.browser.TabbedBrowserScreen
 import com.victorious.browser.inspect.CapturedExchange
+import com.victorious.browser.linkembed.SharedLinks
 import com.victorious.browser.headscale.HeadscaleScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.help.HelpScreen
@@ -55,9 +57,13 @@ import kotlinx.coroutines.flow.collectLatest
 
 class MainActivity : ComponentActivity() {
     private val pendingOpenUrl = mutableStateOf<String?>(null)
+    private val pendingPreviewUrl = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A recreated activity (savedInstanceState != null) re-delivers the original intent;
+        // don't re-open a shared/VIEW link that was already handled.
+        if (savedInstanceState != null) intent?.putExtra(EXTRA_SHARE_HANDLED, true)
         consumeOpenUrl(intent)
         val themeSettings = ThemeSettings.get(this)
         setContent {
@@ -67,6 +73,8 @@ class MainActivity : ComponentActivity() {
                 VictoriousBrowserApp(
                     pendingOpenUrl = pendingOpenUrl.value,
                     onPendingConsumed = { pendingOpenUrl.value = null },
+                    pendingPreviewUrl = pendingPreviewUrl.value,
+                    onPreviewConsumed = { pendingPreviewUrl.value = null },
                 )
             }
         }
@@ -94,9 +102,48 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun consumeOpenUrl(intent: Intent?) {
-        val url = intent?.getStringExtra(BridgeDispatcher.EXTRA_OPEN_URL) ?: return
+        if (intent == null) return
+        consumeSharedLink(intent)
+        val url = intent.getStringExtra(BridgeDispatcher.EXTRA_OPEN_URL) ?: return
         pendingOpenUrl.value = url
         intent.removeExtra(BridgeDispatcher.EXTRA_OPEN_URL)
+    }
+
+    /**
+     * Share-in: ACTION_VIEW http(s) opens a new tab; ACTION_SEND text/plain opens the
+     * link preview sheet for the first http(s) URL in the shared text. Anything that
+     * is not a safe http(s) URL is ignored. Each intent is handled once.
+     */
+    private fun consumeSharedLink(intent: Intent) {
+        if (intent.getBooleanExtra(EXTRA_SHARE_HANDLED, false)) return
+        when (intent.action) {
+            Intent.ACTION_VIEW -> {
+                val url = SharedLinks.fromView(intent.dataString) ?: return
+                intent.putExtra(EXTRA_SHARE_HANDLED, true)
+                pendingOpenUrl.value = url
+            }
+            Intent.ACTION_SEND -> {
+                if (intent.type?.startsWith("text/") != true) return
+                intent.putExtra(EXTRA_SHARE_HANDLED, true)
+                val urls = SharedLinks.extractUrls(
+                    intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString(),
+                    intent.getStringExtra(Intent.EXTRA_SUBJECT),
+                )
+                when {
+                    urls.isEmpty() -> Toast.makeText(this, "No http(s) link found in the shared text", Toast.LENGTH_SHORT).show()
+                    else -> {
+                        if (urls.size > 1) {
+                            Toast.makeText(this, "${urls.size} links shared; previewing the first", Toast.LENGTH_SHORT).show()
+                        }
+                        pendingPreviewUrl.value = urls.first()
+                    }
+                }
+            }
+        }
+    }
+
+    private companion object {
+        const val EXTRA_SHARE_HANDLED = "com.victorious.browser.extra.SHARE_HANDLED"
     }
 }
 
@@ -129,6 +176,8 @@ private sealed class AppDestination {
 fun VictoriousBrowserApp(
     pendingOpenUrl: String? = null,
     onPendingConsumed: () -> Unit = {},
+    pendingPreviewUrl: String? = null,
+    onPreviewConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var destination by remember { mutableStateOf<AppDestination>(AppDestination.Launcher) }
@@ -161,6 +210,14 @@ fun VictoriousBrowserApp(
             }
         }
     }
+    // Shared-in link (ACTION_SEND): show the browser and hand the URL to its preview sheet.
+    var browserPreviewUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(pendingPreviewUrl) {
+        val url = pendingPreviewUrl ?: return@LaunchedEffect
+        browserPreviewUrl = url
+        destination = AppDestination.Browser
+        onPreviewConsumed()
+    }
     LaunchedEffect(pendingOpenUrl) {
         val url = pendingOpenUrl ?: return@LaunchedEffect
         openUrl(url)
@@ -187,6 +244,8 @@ fun VictoriousBrowserApp(
                 onOpenExtensions = { returnToBrowser = true; destination = AppDestination.Extensions },
                 onBackToLauncher = { destination = AppDestination.Launcher },
                 onOpenAntiPhish = { returnToBrowser = true; destination = AppDestination.AntiPhish },
+                externalPreviewUrl = browserPreviewUrl,
+                onExternalPreviewConsumed = { browserPreviewUrl = null },
                 onSendToRepeater = { seed ->
                     replaySeed = seed
                     startRepeater = true
