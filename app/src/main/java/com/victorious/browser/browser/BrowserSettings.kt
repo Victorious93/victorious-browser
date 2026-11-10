@@ -24,8 +24,8 @@ fun applyVictoriousWebSettings(webView: WebView, desktopUserAgent: Boolean, text
     settings.domStorageEnabled = true
     // Accessibility: page text-zoom (font scaling), snapped to a valid level.
     settings.textZoom = TextZoom.snap(textZoom)
-    settings.javaScriptCanOpenWindowsAutomatically = false
-    settings.setSupportMultipleWindows(false)
+    settings.javaScriptCanOpenWindowsAutomatically = true
+    settings.setSupportMultipleWindows(true)
     settings.loadWithOverviewMode = true
     settings.useWideViewPort = true
     settings.builtInZoomControls = true

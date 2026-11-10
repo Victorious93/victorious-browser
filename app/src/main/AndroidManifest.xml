@@ -3,6 +3,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Round 1 "sites just work": requested on demand when a page asks for them. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Optional hardware — app still installs on devices without a camera/mic/GPS. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <!-- Read-only Wi-Fi state for Net ID MAC status (no MAC change capability). -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Legacy (API <=28) write to public Downloads for CA / evidence exports.
@@ -31,6 +40,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/Theme.VictoriousBrowser"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

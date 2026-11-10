@@ -371,6 +371,10 @@ read from `PanelStore` at launch. `LiteAppActivity` is not exported.
 
 ## Browser shell
 
+### Sites just work
+File uploads, fullscreen video, mailto/tel/intent links (with confirmation for unknown schemes), gesture-gated pop-ups as real tabs, per-site camera/mic/location prompts, Site settings, and renderer-crash recovery so a dead tab can't take down the app.
+
+
 The browsing surface is a single system **WebView** hosted in Jetpack Compose via
 `AndroidView` (no embedded Chromium / Gecko binary).
 

@@ -458,6 +458,19 @@ privileges (still no bridges, no file access, same sandbox).
   refuse in-iframe playback or fullscreen for policy/referrer reasons — that is on
   the provider, not missing wiring. This has not been verified on a physical device.
 
+
+### Sites just work (Round 1)
+
+Everyday site features that used to silently fail now work inside the tabbed browser:
+
+- **File uploads.** `<input type=file>` and "Attach photo" buttons open the system picker (single or multiple, honouring the page's `accept` types). Works in private tabs too. Chosen files are handed straight to the page; nothing is uploaded by the browser itself.
+- **Fullscreen video.** HTML5 video fullscreen covers the browser chrome, enters immersive mode, and Back exits. Optional Picture-in-Picture when you leave the app while a video is fullscreen (Android 8+).
+- **Links to other apps.** `mailto:`, `tel:`, `sms:`, `geo:`, `market:`, and `intent:` links open the matching app. Unknown custom schemes show an **Open in app?** confirmation — they are never auto-launched. `javascript:`, `file:`, `content:`, `data:`, `about:` and `blob:` from pages are blocked.
+- **Pop-ups / `target=_blank`.** A pop-up that comes from a user tap opens as a real new tab (with `window.opener` for OAuth). A pop-up the page fires on its own is blocked and shows a **Pop-up blocked** chip: Allow once / Always for this site / Keep blocked. Per-site pop-up policy lives in Site settings.
+- **Camera, microphone, location.** When a page asks, you get **Allow once / Always / Block**. Always/Block are remembered per site (never on private tabs). Android runtime permissions are requested only when needed.
+- **Site settings.** Reachable from the address-bar SITE / TLS chip, ⋮ → Site settings…, or Fleet tools → Site settings. Controls camera, mic, location, pop-ups (Ask/Allow/Block) and JavaScript on/off, plus Clear for this site.
+- **Renderer crash recovery.** If a tab's WebView renderer dies, that tab shows **This page crashed — Reload** and the rest of the app keeps running.
+
 ## Privacy protections & Fire
 
 Privacy features inspired by privacy-first mobile browsers, in Victorious neon. **Every toggle is OFF by default** because for recon, trackers, raw URLs, and referrers are often the signal. Open **⋮ → Privacy protections…** or tap the **shield** next to the address bar.

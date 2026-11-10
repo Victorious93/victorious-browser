@@ -39,6 +39,7 @@ import com.victorious.browser.ui.theme.NeonMagenta
 fun ToolsSheet(
     onOpen: (String) -> Unit,
     onDismiss: () -> Unit,
+    onSiteSettings: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -49,6 +50,11 @@ fun ToolsSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (onSiteSettings != null) {
+                TextButton(onClick = { onDismiss(); onSiteSettings() }) {
+                    Text("Site settings for this page…", color = NeonCyan)
+                }
+            }
             Spacer(Modifier.height(8.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ToolsCatalog.quickIds.forEach { id ->
