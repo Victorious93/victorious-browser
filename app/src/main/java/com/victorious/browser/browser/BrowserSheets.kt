@@ -337,6 +337,7 @@ internal fun LinkMenuDialog(
     onShare: () -> Unit,
     onBookmark: () -> Unit,
     onDownload: () -> Unit,
+    onPreview: (() -> Unit)? = null,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -356,6 +357,7 @@ internal fun LinkMenuDialog(
                 item("Open", onOpen)
                 item("Open in new tab", onOpenNewTab)
                 item("Open in background tab", onOpenBackground)
+                if (onPreview != null) item("Preview link · embed · recon", onPreview)
                 item("Copy link", onCopy)
                 item("Share link", onShare)
                 item("Bookmark link", onBookmark)

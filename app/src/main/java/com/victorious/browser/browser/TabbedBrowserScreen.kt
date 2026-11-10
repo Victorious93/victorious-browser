@@ -150,6 +150,8 @@ fun TabbedBrowserScreen(
     onBackToLauncher: (() -> Unit)? = null,
     onOpenAntiPhish: (() -> Unit)? = null,
     onSendToRepeater: (CapturedExchange?) -> Unit = {},
+    externalPreviewUrl: String? = null,
+    onExternalPreviewConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val appContext = context.applicationContext
@@ -217,6 +219,8 @@ fun TabbedBrowserScreen(
     var showCertInfo by remember { mutableStateOf(false) }
     var menuRecon by remember { mutableStateOf(false) }
     var linkMenu by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    // Link preview / embed recon / copy-as-embed sheet target (null = closed).
+    var previewUrl by remember { mutableStateOf<String?>(null) }
     var urlFocused by remember { mutableStateOf(false) }
     // Per-tab TLS certificate as reported by WebView (null for http / not loaded).
     val certs = remember { mutableStateMapOf<String, SslCertificate?>() }
@@ -257,6 +261,13 @@ fun TabbedBrowserScreen(
     }
 
     val activeTab = tabs.firstOrNull { it.id == activeId }
+
+    // Links shared into the app (ACTION_SEND) open the preview sheet.
+    LaunchedEffect(externalPreviewUrl) {
+        val u = externalPreviewUrl ?: return@LaunchedEffect
+        previewUrl = u
+        onExternalPreviewConsumed()
+    }
 
     // Keep the URL bar in sync with the active tab (follows navigation, like the
     // single-tab screen did).
@@ -875,6 +886,7 @@ fun TabbedBrowserScreen(
                         if (onOpenAntiPhish != null) item("Anti-Phish") { onOpenAntiPhish() }
                         item("Inject JS / HTML") { showInject = true }
                         item("URL tools") { showUrlTools = true }
+                        item("Link preview & embed recon", enabled = currentUrl().isNotBlank()) { previewUrl = currentUrl() }
                         item("Screenshot → evidence") { captureShot() }
                         if (certs[activeId ?: ""] != null) item("Certificate info") { showCertInfo = true }
                         HorizontalDivider()
@@ -1114,6 +1126,7 @@ fun TabbedBrowserScreen(
                 Toast.makeText(appContext, "Opened in background tab", Toast.LENGTH_SHORT).show()
             },
             onCopy = { copyText(url) },
+            onPreview = { previewUrl = url },
             onShare = { shareText(url) },
             onBookmark = {
                 bookmarkStore.add(url, "")
@@ -1122,6 +1135,17 @@ fun TabbedBrowserScreen(
             onDownload = {
                 startDownloadImpl(url, activeId?.let { webViews[it]?.settings?.userAgentString }, null, null)
             },
+        )
+    }
+
+    previewUrl?.let { target ->
+        com.victorious.browser.linkembed.LinkPreviewSheet(
+            initialUrl = target,
+            isPrivate = activeTab?.incognito == true,
+            onDismiss = { previewUrl = null },
+            onOpen = { u -> doOpenUrl(u, newTab = false) },
+            onOpenNewTab = { u -> doOpenUrl(u, newTab = true) },
+            onCopy = { text, toast -> copyText(text, toast) },
         )
     }
 

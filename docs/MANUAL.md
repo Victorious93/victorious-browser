@@ -39,7 +39,7 @@ bookmarks and history (picking an open tab switches to it). Go, Back, Forward an
 Reload (which becomes **Stop** while a page loads). The tab strip switches/closes
 tabs; the **tab-count** square opens the tab switcher (grid with favicon, title and
 URL; New tab, Close others, Close all). Long-press a link for Open, New tab,
-Background tab, Copy, Share, Bookmark and Download.
+Background tab, **Preview link · embed · recon**, Copy, Share, Bookmark and Download.
 
 The **⋮ menu** holds New tab, **New private tab**, Tabs, History, Bookmarks,
 Downloads, Find in page (next/previous match), Share/Copy link, Desktop site,
@@ -378,6 +378,74 @@ the active tab's host without uninstalling them.
 The older **Scripts** button (host-pattern-only, no metadata block) remains for
 simple one-off snippets; prefer **Extensions** for real userscripts.
 
+
+## Link preview, embeds & embed recon
+
+**What it does.** Everything runs on the device; there is no preview server.
+- **Rich link preview card**: title, description, site name, image and the final URL
+  after redirects, read from Open Graph, Twitter Card and oEmbed metadata, with
+  `<title>` / favicon / URL fallbacks.
+- **Embed recon**: final URL, HTTP status, Content-Type, X-Frame-Options, CSP
+  `frame-ancestors` (plus Report-Only, shown as not enforced) and a verdict:
+  **Embeddable**, **Conditional** (only listed origins, or obsolete ALLOW-FROM),
+  **Not embeddable** (`'none'`, `'self'`, DENY, SAMEORIGIN, conflicting values) or
+  **Unknown** (fetch failed, timed out, or a non-2xx status). An enforced CSP
+  `frame-ancestors` overrides X-Frame-Options, like current browsers.
+- **Copy as embed**: Markdown `[title](url)`, HTML `<a href>`, an HTML `<iframe>`
+  (only when the verdict is Embeddable; otherwise you get a plain link and the
+  reason the iframe was left out), and the provider's oEmbed HTML when one exists.
+  Titles and URLs are escaped so a hostile page title cannot break out of the snippet.
+  oEmbed HTML is copied exactly as the provider sent it and is untrusted.
+- **Sandboxed embedded viewer** (*View embedded*): plays oEmbed players (for example
+  YouTube or Vimeo) or frames a page that recon reports as embeddable. If a page is
+  not embeddable, the viewer says why and offers **Open as a normal tab** instead.
+
+**How to use.** Long-press a link → **Preview link · embed · recon**, or open
+⋮ → Recon tools ▸ **Link preview & embed recon** for the current page. You can type
+another URL into the sheet and tap *Check URL*. Sharing text that contains a link
+to Victorious Browser (Android share sheet → Victorious Browser) opens the same
+sheet for the first http(s) link; opening an http(s) link with Victorious Browser
+opens it in a new tab.
+
+**Privacy and network.** Only `http` and `https` URLs are fetched. `javascript:`,
+`data:`, `file:`, `content:`, `intent:` and every other scheme are refused, including
+on redirects and in page metadata. Each fetch is bounded: at most 5 redirects, a 15 s
+overall deadline, 512 KB of page, 64 KB of oEmbed JSON and 1 MB of image (SVG is never
+rendered). Fetches send no cookies and use no HTTP cache. When the intercepting proxy is
+on they go through it, so they also appear in Proxy history. Force HTTPS and
+Strip link tracking are applied to the first URL and every redirect. GPC sends
+`Sec-GPC: 1`. With tracker protection on, preview images on listed tracker hosts are
+skipped. Previews are cached in memory only (32 entries, 8 MB, 30 minutes).
+**In a private tab nothing is fetched until you tap *Load preview*,** and
+private-tab previews are never cached.
+
+**Viewer isolation.** The viewer is a separate WebView with no JavaScript bridge,
+no user scripts, extensions or privacy/spoof injectors, no file or content access,
+no geolocation, every permission request denied, third-party cookies off, and no
+pop-up windows. When the WebView Profile API is available it uses its own
+`embed-viewer` profile, and that profile's cookies and storage are wiped when the
+viewer closes. The badge shows **ISOLATED PROFILE** or **SHARED PROFILE**. Remote
+content only runs inside a sandboxed iframe in a wrapper page that has no script
+and a strict CSP. A provider `<iframe>` keeps its own origin. Any other oEmbed HTML
+runs in an opaque-origin `srcdoc` sandbox (no cookies or storage, inline scripts
+blocked). Any attempt to navigate the viewer itself is cancelled and offered as
+*Open in tab*.
+
+**Honest limits.**
+- Verdicts are **technical signals only**, based on the headers this device saw on one
+  fetch. They are **not legal permission** to embed and say nothing about terms of
+  service or copyright. *Embeddable* does not guarantee playback: providers can still
+  refuse because of referrer, cookies, region, per-video settings or JavaScript
+  frame-busting.
+- Recon fetches without cookies, so pages that vary by login or region may send
+  different headers to the WebView. `<meta>` CSP and JavaScript frame-busting are not
+  evaluated.
+- Some sites serve Open Graph tags only to known crawler user agents, or put them
+  beyond the first 512 KB. Built-in oEmbed endpoints cover YouTube and Vimeo;
+  other providers need a discovery `<link>`.
+- Without multi-profile WebView support the viewer shares the default profile
+  (third-party cookies are still off). Fullscreen video inside the viewer is not
+  wired up. Shared text with several links previews only the first one.
 
 ## Privacy protections & Fire
 

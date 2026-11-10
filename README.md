@@ -412,6 +412,37 @@ The browsing surface is a single system **WebView** hosted in Jetpack Compose vi
 - `androidx.webkit` `ProxyController` routes the WebView through the local
   inspection proxy when enabled (see below)
 
+### Link preview, embed recon & sandboxed viewer (`com.victorious.browser.linkembed`)
+
+All on-device; no new third-party libraries (hand-written parsers + `HttpURLConnection`,
+`org.json` from the Android platform).
+
+- **Preview card**: Open Graph → Twitter Card → `<title>`/description/favicon fallbacks
+  (`HtmlMetadataParser`), plus oEmbed via `<link rel=alternate type=application/json+oembed>`
+  or built-in YouTube/Vimeo endpoints (`OEmbed`). Entry points: long-press a link →
+  *Preview link · embed · recon*, ⋮ → Recon tools ▸ *Link preview & embed recon*, and
+  Android share-in.
+- **Share-in**: `ACTION_SEND text/plain` (first http(s) URL → preview sheet) and
+  `ACTION_VIEW` http/https (opens a tab). `SharedLinks` drops every other scheme.
+- **Embed recon** (`EmbedRecon`): final URL, status, content-type, X-Frame-Options,
+  CSP `frame-ancestors` (Report-Only shown as unenforced) → Embeddable / Conditional /
+  Not embeddable / Unknown. CSP wins over XFO, as in current browsers. **These are
+  technical signals only, not legal permission. They do not guarantee that a provider
+  will allow playback.**
+- **Copy as embed** (`EmbedSnippets`): escaped Markdown, `<a href>`, an `<iframe>` only
+  when the verdict is Embeddable (otherwise a link plus a fixed "iframe omitted"
+  comment), and the provider's oEmbed HTML verbatim (untrusted).
+- **Sandboxed viewer** (`EmbedViewerDialog` / `EmbedViewerHtml`): an isolated WebView
+  (no JS bridge, injectors, file/content access or permissions, 3P cookies off, its own
+  `embed-viewer` Profile when MULTI_PROFILE exists, wiped on close). A no-script wrapper
+  with a strict CSP hosts remote content only inside sandboxed iframes. Main-frame
+  navigation is cancelled and offered as a normal tab.
+- **Fetch bounds** (`BoundedFetcher`): only http(s), checked on every redirect; max 5
+  redirects, a 15 s deadline, and 512 KB page / 64 KB oEmbed / 1 MB image caps. No
+  cookies and no cache. It goes through the local proxy when that is running and honors
+  Force HTTPS, Strip tracking, GPC and tracker blocking (images). Private tabs never
+  auto-fetch, and their previews are not cached (`PreviewPolicy`).
+
 ### Content blocker
 
 Host-suffix blocking by category (adware & malware, coin miners, trackers, adult —
