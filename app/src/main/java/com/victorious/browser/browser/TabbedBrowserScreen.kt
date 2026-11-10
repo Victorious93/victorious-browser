@@ -166,7 +166,8 @@ fun TabbedBrowserScreen(
     val progressMap = remember { mutableStateMapOf<String, Int>() }
     val loadingMap = remember { mutableStateMapOf<String, Boolean>() }
 
-    var desktopUa by remember { mutableStateOf(false) }
+    // Seeded from the persisted global "Desktop site" toggle so it survives restarts.
+    var desktopUa by remember { mutableStateOf(BrowserPrefs.get(appContext).desktopSite.value) }
     var urlBarText by remember { mutableStateOf("") }
 
     // Parity with single-tab BrowserScreen: Night (global setting, applied to every
@@ -626,6 +627,7 @@ fun TabbedBrowserScreen(
 
     fun applyDesktop(on: Boolean) {
         desktopUa = on
+        browserPrefs.setDesktopSite(on) // persist across restarts
         val netId = NetIdSettings.get(appContext)
         webViews.values.forEach {
             applyVictoriousWebSettings(it, on, textZoom)
