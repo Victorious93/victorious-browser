@@ -26,6 +26,7 @@ object ToolsCatalog {
             listOf(
                 Tool("network", "Proxy / HTTP history", "Intercept, repeater, history"),
                 Tool("recon", "Recon workbench", "Encoders, hashes, URL tools"),
+                Tool("research", "Deep Research", "OSINT: dorks, phone, email, user, image"),
                 Tool("osint", "OSINT", "Sources, dorks, fingerprints"),
                 Tool("antiphish", "Anti-Phish", "Warnings & reports"),
             ),

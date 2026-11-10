@@ -58,6 +58,16 @@ for the developer's own traffic.
   links for public OSINT sources (crt.sh, DNS, reverse-IP, Wayback, Shodan,
   Censys, WHOIS, VirusTotal, GitHub/Google dorks, username/email lookups); passive
   tech fingerprint over already-captured responses (landed on `feature/osint-dork`)
+- **Deep Research (OSINT hub)** — Fleet tools → Deep Research: a dork composer
+  with a curated recon dork library and favorites (Google/Bing/DDG/custom); offline
+  phone analysis (libphonenumber); email syntax + MX/SPF/DMARC via DoH, disposable
+  flag, Gravatar, optional HIBP with your own Keystore-encrypted key; Sherlock-style
+  username check (bounded, rate-limited, honest found/not-found/unknown); domain/IP
+  DNS (DoH), RDAP, crt.sh subdomains and pivots; reverse image search (Google Lens,
+  Bing, Yandex, TinEye, custom; long-press an image → "Reverse image search") with
+  local EXIF/GPS, MD5/SHA-256 and dHash; and a case notebook exporting Markdown/JSON
+  to Evidence and Fleet export. Public sources only; nothing saved unless you tap
+  "Save to case"
 - **Scanner (Burp-lite web-testing toolset)** — Sitemap/crawler (site tree from
   captured history + bounded, scope-gated same-origin crawl), opt-in active
   scanner (reflected XSS, error/boolean/time-based SQLi, SSRF indicators per

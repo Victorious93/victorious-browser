@@ -36,6 +36,7 @@ import com.victorious.browser.help.HelpScreen
 import com.victorious.browser.home.HomeScreen
 import com.victorious.browser.panels.FleetPanelScreen
 import com.victorious.browser.osint.OsintScreen
+import com.victorious.browser.osint.research.DeepResearchScreen
 import com.victorious.browser.recon.ReconWorkbenchScreen
 import com.victorious.browser.scanner.ScannerScreen
 import com.victorious.browser.netid.NetIdScreen
@@ -154,6 +155,7 @@ internal sealed class AppDestination {
     data object Extensions : AppDestination()
     data object Sandboxes : AppDestination()
     data object Osint : AppDestination()
+    data object Research : AppDestination()
     data object Scanner : AppDestination()
     data object NetId : AppDestination()
     data object Fuzz : AppDestination()
@@ -312,6 +314,21 @@ fun VictoriousBrowserApp(
                 onBack = { backFromTool() },
                 onOpenUrl = { url -> openUrl(url) },
             )
+            AppDestination.Research -> DeepResearchScreen(
+                modifier = pad,
+                onBack = { backFromTool() },
+                onOpenUrl = { url -> openUrl(url) },
+                onOpenInBackground = { url -> tabStore.openTab(url, activate = false) },
+                onOpenPrivate = { url ->
+                    tabStore.openTab(url, activate = true, incognito = true)
+                    destination = AppDestination.Browser
+                },
+                onSendToFleet = { targets ->
+                    FleetExportStaging.stage(targets = targets)
+                    openTool(AppDestination.Export)
+                },
+                onOpenScanner = { openTool(AppDestination.Scanner) },
+            )
             AppDestination.Scanner -> ScannerScreen(
                 modifier = pad,
                 onBack = { backFromTool() },
@@ -403,6 +420,7 @@ internal fun toolDestination(id: String): AppDestination = when (id) {
     "extensions" -> AppDestination.Extensions
     "sandboxes" -> AppDestination.Sandboxes
     "osint" -> AppDestination.Osint
+    "research" -> AppDestination.Research
     "scanner" -> AppDestination.Scanner
     "netid" -> AppDestination.NetId
     "fuzz" -> AppDestination.Fuzz

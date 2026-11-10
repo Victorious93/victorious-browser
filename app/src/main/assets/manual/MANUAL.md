@@ -26,7 +26,7 @@ Use it **only against systems you own or are explicitly authorized to test.**
   proxy credentials, tokens and certs. Only public CA certificates are ever
   exported — never a private key.
 - **Branding.** Dark charcoal UI with the neon cyan (`#00E5FF`) → magenta (`#FF2BD6`, fleet brand) ring. Background charcoal; accent cyan `#00E5FF`.
-- **Browser-first.** The app opens straight into the tabbed browser. There is no separate home screen as the start destination. Every fleet tool (panels, proxy/HTTP history, recon, OSINT, scanner, fuzz, Metasploit, Net ID, WireGuard, Headscale, sandboxes, extensions, scripts, anti-phish, certs, evidence, export, help) is reachable from inside the browser via the brand-ring **Fleet tools** sheet, the new-tab page chips, or ⋮ → **Fleet tools…**. Tool screens open as overlays; Back returns to the live browser (tabs stay alive).
+- **Browser-first.** The app opens straight into the tabbed browser. There is no separate home screen as the start destination. Every fleet tool (panels, proxy/HTTP history, recon, Deep Research, OSINT, scanner, fuzz, Metasploit, Net ID, WireGuard, Headscale, sandboxes, extensions, scripts, anti-phish, certs, evidence, export, help) is reachable from inside the browser via the brand-ring **Fleet tools** sheet, the new-tab page chips, or ⋮ → **Fleet tools…**. Tool screens open as overlays; Back returns to the live browser (tabs stay alive).
 
 ## Browser & Tabs
 
@@ -153,6 +153,69 @@ already captured — it does not fetch anything new.
 
 **Safety.** Queries open in the browser for you to review; nothing is automated
 against a target. Fingerprinting is passive over existing captures only.
+
+## Deep Research (OSINT hub)
+
+**What it does.** One place for open-source research, opened from **Fleet tools → Deep Research**.
+It has seven tabs:
+
+- **Dorks.** Fill in a target domain and/or keyword, then add operator chips: `site:`,
+  `inurl:`, `intitle:`, `intext:`, `filetype:`, `ext:`, `before:`/`after:` (YYYY, YYYY-MM or
+  YYYY-MM-DD), `"exact"`, `-exclude`, `OR`, and free text. The **dork library** has about
+  30 recon templates in groups: exposed files, login pages, directory listings,
+  config/backup, errors, docs and people, subdomains, code and paste sites, cameras and
+  devices, and cloud storage. You can run a query on Google, Bing, DuckDuckGo or a custom
+  engine (`https://…%s`). Queries you like can be saved as ★ favorites.
+- **Phone.** Parsed offline with libphonenumber. It shows whether the number is valid,
+  its country and region, its location, the original carrier (numbers can be ported to
+  another carrier), the line type, time zones, and the E.164, international and
+  national formats. There are also one-tap public pivots: search-engine queries,
+  wa.me and t.me links, and searches of reverse-lookup sites.
+- **Email.** Runs a syntax check, then looks up the domain's MX, SPF and DMARC records
+  through Cloudflare DNS-over-HTTPS. It flags disposable domains from a small bundled
+  list, which you can refresh from the public-domain disposable-email-domains list. It
+  also checks whether a Gravatar avatar exists, and has search pivots. A **Have I Been
+  Pwned** breach check is available only if you paste your own HIBP API key. The key is
+  encrypted with an Android Keystore key and stays on the phone.
+- **Username.** A Sherlock-style check across a bundled starter list of about 28
+  sites. You can also tap **Load full Sherlock list** to fetch Sherlock's `data.json`
+  at that moment. It sends at most 4 requests at a time, with a short pause between
+  them. Each site gets one of four results: *found*, *not found*, *unknown* (rate
+  limit, login wall, captcha, server error or unclear answer) or *skipped* (the
+  username format isn't allowed on that site). Results open as background tabs.
+- **Domain / IP.** DNS records (A, AAAA, CNAME, MX, NS, TXT, CAA, SOA, or PTR for an
+  IP) through Cloudflare or Google DoH. RDAP (the structured WHOIS) through rdap.org.
+  Certificate-transparency subdomains from crt.sh. Pivots for reverse IP, Shodan,
+  Censys, ipinfo, AbuseIPDB, VirusTotal, Wayback, urlscan and more. Two buttons hand
+  off to other tools: **Stage for fleet export** and **Open scanner** (which copies the
+  target URL first). No automatic IP geolocation is fetched; use the ipinfo pivot.
+- **Image (reverse image search).** There are three ways to bring in an image: pick
+  one from the device, paste an image URL, or long-press an image in any tab and choose
+  **Reverse image search**. With a URL, Google Lens, Bing Visual Search, Yandex
+  Images, TinEye or your custom engine (`https://…{url}`) opens on its public
+  search-by-URL page. With a local file, the engine's own upload page opens in a tab:
+  tap its upload button and choose the file. The app never uploads anything itself and
+  never calls private APIs. Metadata is read on the phone: dimensions, type, file size,
+  MD5, SHA-256, a perceptual dHash, and EXIF (camera, timestamps, GPS, with a map
+  link). You can **Copy EXIF** or **Save to case**. Face-recognition services are not
+  included.
+- **Case.** A research notebook with cases, targets, notes and timestamped entries.
+  You can export a case as Markdown or JSON (share sheet), send it to **Evidence** (it
+  is added as a note to the active evidence case), or stage its targets for **Fleet
+  export**.
+
+**Network.** Every lookup uses the app's bounded HTTP fetcher: http(s) only, at most
+5 redirects, size caps (64 KB for DNS, 512 KB for RDAP, 4 MB for crt.sh, 20 MB for
+images), an overall timeout, and no cookies. Lookups go through the local
+inspection proxy when it is running, so they also show up in HTTP history. No API keys
+ship with the app.
+
+**Safety.** Use this only for authorized security research or your own data. It uses
+public sources only and never bypasses logins, paywalls, captchas or site terms.
+Nothing is saved unless you tap **Save to case**. Images handed over from a **private
+tab** are searched in a private tab, and nothing about them is fetched or saved until
+you tap a button. Results from public sources can be stale or wrong. Carrier data,
+"found" usernames and breach hits are leads to check, not proof.
 
 ## Scanner (Burp-lite)
 

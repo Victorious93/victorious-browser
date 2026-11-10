@@ -236,6 +236,8 @@ fun TabbedBrowserScreen(
     var showCertInfo by remember { mutableStateOf(false) }
     var menuRecon by remember { mutableStateOf(false) }
     var linkMenu by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    // Image src of the last long-pressed image (for "Reverse image search"); null for plain links.
+    var longPressImage by remember { mutableStateOf<String?>(null) }
     // Link preview / embed recon / copy-as-embed sheet target (null = closed).
     var previewUrl by remember { mutableStateOf<String?>(null) }
     var showTools by remember { mutableStateOf(false) }
@@ -615,6 +617,7 @@ fun TabbedBrowserScreen(
                 val hit = wv.hitTestResult
                 when (hit.type) {
                     WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                        longPressImage = null
                         hit.extra?.let { linkMenu = it to false }
                         hit.extra != null
                     }
@@ -623,8 +626,15 @@ fun TabbedBrowserScreen(
                         val msg = Handler(Looper.getMainLooper()).obtainMessage()
                         wv.requestFocusNodeHref(msg)
                         val href = msg.data.getString("url")?.takeIf { it.isNotBlank() }
+                        longPressImage = hit.extra
                         (href ?: hit.extra)?.let { linkMenu = it to (href == null) }
                         true
+                    }
+                    WebView.HitTestResult.IMAGE_TYPE -> {
+                        // A plain (un-linked) image: offer the image menu with reverse search.
+                        longPressImage = hit.extra
+                        hit.extra?.let { linkMenu = it to true }
+                        hit.extra != null
                     }
                     else -> false // let WebView handle text selection etc.
                 }
@@ -1446,6 +1456,15 @@ fun TabbedBrowserScreen(
             onDownload = {
                 startDownloadImpl(url, activeId?.let { webViews[it]?.settings?.userAgentString }, null, null)
             },
+            onReverseImage = longPressImage
+                ?.takeIf { com.victorious.browser.osint.research.ReverseImage.isShareableImageUrl(it) }
+                ?.let { src ->
+                    {
+                        com.victorious.browser.osint.research.ResearchHandoff.reverseImage(src, activeTab?.incognito == true)
+                        onOpenTool?.invoke("research")
+                        Unit
+                    }
+                },
         )
     }
 

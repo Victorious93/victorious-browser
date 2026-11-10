@@ -100,6 +100,12 @@ dependencies {
     // WireGuard VPN client (GoBackend/VpnService) — see NOTICE
     implementation(libs.wireguard.tunnel)
 
+    // Deep Research hub: offline phone parsing (Apache-2.0) + EXIF reading (Apache-2.0) — see NOTICE
+    implementation(libs.libphonenumber)
+    implementation(libs.libphonenumber.carrier)
+    implementation(libs.libphonenumber.geocoder)
+    implementation(libs.androidx.exifinterface)
+
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
     // com.wireguard.config.* (Config/Interface/Peer/Key) has no Android or native-code

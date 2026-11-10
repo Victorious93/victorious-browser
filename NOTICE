@@ -199,3 +199,41 @@ License: same as this project
 Hand-curated from public knowledge of widely documented ad/analytics domains.
 NOT derived from DuckDuckGo Tracker Radar (CC BY-NC-SA 4.0), EasyList, or any
 other third-party list. No DuckDuckGo code, names, or artwork are used.
+
+-----------------------------------------------------------------------------
+Deep Research (OSINT hub) — app/src/main/java/.../osint/research/
+
+libphonenumber, carrier, geocoder (com.googlecode.libphonenumber)
+  Copyright (C) The Libphonenumber Authors
+  License: Apache License 2.0 — https://github.com/google/libphonenumber
+  Used offline for phone parsing, validation, formatting, original-carrier,
+  location and time-zone data.
+
+AndroidX ExifInterface (androidx.exifinterface:exifinterface)
+  Copyright (C) The Android Open Source Project
+  License: Apache License 2.0
+  Used to read EXIF tags from images the user picks or explicitly fetches.
+
+Username site list (app/src/main/assets/osint/username_sites.json)
+  A small hand-picked list written for this app in the same JSON format as the
+  Sherlock Project's data.json (https://github.com/sherlock-project/sherlock,
+  MIT License, Copyright (c) Sherlock Project). The full Sherlock data.json is NOT
+  vendored; it is only fetched at runtime when the user taps "Load full Sherlock
+  list", and remains under Sherlock's MIT license.
+
+Disposable email domains (DisposableDomains.kt)
+  A small first-party list of well-known throwaway-mail services. The optional
+  runtime refresh fetches disposable-email-domains
+  (https://github.com/disposable-email-domains/disposable-email-domains), which is
+  dedicated to the public domain (CC0 1.0). Nothing from it is vendored.
+
+Dork library (DorkComposer.kt / DorkLibrary)
+  First-party recon templates using standard, publicly documented search operators.
+  Not copied from the Google Hacking Database.
+
+External services are only opened as normal browser tabs (Google, Bing,
+DuckDuckGo, Google Lens, Bing Visual Search, Yandex Images, TinEye, wa.me, t.me,
+crt.sh, Shodan, Censys, etc.) or called through their public endpoints (Cloudflare
+and Google DNS-over-HTTPS, rdap.org, crt.sh JSON, Gravatar avatar URLs, and Have I
+Been Pwned v3 only with the user's own API key). No third-party API keys are
+bundled. No face-recognition services are used.
