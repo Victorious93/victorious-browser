@@ -830,6 +830,9 @@ fun TabbedBrowserScreen(
                         item("New tab") { tabStore.openTab(HOME_URL) }
                         item("New private tab") { tabStore.openTab(HOME_URL, incognito = true) }
                         item("Reopen closed tab", enabled = recentlyClosed.isNotEmpty()) { tabStore.reopenLastClosed() }
+                        item("Close other tabs", enabled = activeId != null && tabs.size > 1) {
+                            activeId?.let { keep -> tabStore.otherTabIds(keep).forEach { destroyTab(it) } }
+                        }
                         item("Tabs (${tabs.size})…") { showTabSwitcher = true }
                         HorizontalDivider()
                         item("History") { showHistory = true }
