@@ -37,4 +37,17 @@ class SharedLinksTest {
         val many = (1..50).joinToString(" ") { "https://e$it.example/" }
         assertEquals(SharedLinks.MAX_URLS, SharedLinks.extractUrls(many).size)
     }
+
+    @Test fun actionForZeroOneMany() {
+        assertEquals(SharedLinks.ShareAction.NoLinks, SharedLinks.actionFor(emptyList()))
+        assertEquals(SharedLinks.ShareAction.PreviewOne("https://a.example/"), SharedLinks.actionFor(listOf("https://a.example/")))
+        val many = listOf("https://a.example/", "https://b.example/")
+        assertEquals(SharedLinks.ShareAction.Pick(many), SharedLinks.actionFor(many))
+    }
+
+    @Test fun displayLabelSplitsHostAndPath() {
+        val (host, rest) = SharedLinks.displayLabel("https://www.Example.com/path/here?q=1")
+        assertEquals("Example.com", host)
+        assertTrue(rest.startsWith("/path/here"))
+    }
 }

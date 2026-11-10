@@ -11,6 +11,21 @@ import com.victorious.browser.evidence.EvidenceStore
 import com.victorious.browser.evidence.WebViewCapture
 import android.widget.FrameLayout
 import android.widget.Toast
+
+import android.app.Activity
+import android.app.PictureInPictureParams
+import android.content.pm.ActivityInfo
+import android.net.Uri
+import android.os.Build
+import android.os.Message
+import android.view.View
+import android.webkit.GeolocationPermissions
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.victorious.browser.linkembed.FullscreenSession
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -120,7 +135,8 @@ import com.victorious.browser.browser.privacy.PrivacySettingsSheet
 import com.victorious.browser.browser.privacy.PrivacyShieldIcon
 import com.victorious.browser.browser.privacy.PrivacyStats
 
-private const val HOME_URL = "https://example.com"
+// Fresh tabs show the neon new-tab page (Compose), not example.com.
+private const val HOME_URL = NEW_TAB_URL
 
 /**
  * Multi-tab browsing host.
@@ -147,10 +163,11 @@ fun TabbedBrowserScreen(
     onOpenNetwork: () -> Unit = {},
     onOpenScripts: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
-    onBackToLauncher: (() -> Unit)? = null,
+    onOpenTool: ((String) -> Unit)? = null,
     onOpenAntiPhish: (() -> Unit)? = null,
     onSendToRepeater: (CapturedExchange?) -> Unit = {},
-    externalPreviewUrl: String? = null,
+    /** Links shared into the app (ACTION_SEND): one → preview sheet, several → picker. */
+    externalPreviewUrls: List<String>? = null,
     onExternalPreviewConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -219,8 +236,13 @@ fun TabbedBrowserScreen(
     var showCertInfo by remember { mutableStateOf(false) }
     var menuRecon by remember { mutableStateOf(false) }
     var linkMenu by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    // Image src of the last long-pressed image (for "Reverse image search"); null for plain links.
+    var longPressImage by remember { mutableStateOf<String?>(null) }
     // Link preview / embed recon / copy-as-embed sheet target (null = closed).
     var previewUrl by remember { mutableStateOf<String?>(null) }
+    var showTools by remember { mutableStateOf(false) }
+    // Several links shared at once: picker list (stays until dismissed; hidden while a preview is open).
+    var sharedPick by remember { mutableStateOf<List<String>?>(null) }
     var urlFocused by remember { mutableStateOf(false) }
     // Per-tab TLS certificate as reported by WebView (null for http / not loaded).
     val certs = remember { mutableStateMapOf<String, SslCertificate?>() }
@@ -245,6 +267,35 @@ fun TabbedBrowserScreen(
     var showFire by remember { mutableStateOf(false) }
     var showPrivacySettings by remember { mutableStateOf(false) }
 
+    // Round 1 "sites just work": uploads, fullscreen, external schemes, site perms, pop-ups, crash recovery.
+    val activity = context as? Activity
+    val sitePerms = remember { SitePermissionStore.get(appContext) }
+    val sitePermMap by sitePerms.sites.collectAsState()
+    var showSiteSettings by remember { mutableStateOf(false) }
+    var filePathCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    val pickOneFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        filePathCallback?.onReceiveValue(uri?.let { arrayOf(it) })
+        filePathCallback = null
+    }
+    val pickManyFiles = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        filePathCallback?.onReceiveValue(uris.takeIf { it.isNotEmpty() }?.toTypedArray())
+        filePathCallback = null
+    }
+    val requestRuntimePerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { /* continued by pending prompt */ }
+    val fullscreenSession = remember {
+        FullscreenSession<View, WebChromeClient.CustomViewCallback> { cb -> cb.onCustomViewHidden() }
+    }
+    var fullscreenView by remember { mutableStateOf<View?>(null) }
+    var pendingSitePrompt by remember { mutableStateOf<PendingSitePrompt?>(null) }
+    var pendingExternalUrl by remember { mutableStateOf<String?>(null) }
+    var popupBlockedHost by remember { mutableStateOf<String?>(null) }
+    var showPopupBlockedDialog by remember { mutableStateOf(false) }
+    val allowOncePopups = remember { mutableStateOf(setOf<String>()) }
+    // Private-tab grants: never persisted. Keyed by host → permission → decision.
+    val privateGrants = remember { mutableStateMapOf<String, MutableMap<SitePermission, PermissionDecision>>() }
+    // Renderer-crash recovery: tab id → user-facing message. WebView for that tab is destroyed.
+    val crashedTabs = remember { mutableStateMapOf<String, String>() }
+
     var meshChecking by remember { mutableStateOf(false) }
     var meshBlock by remember { mutableStateOf<MeshOpenDecision.Blocked?>(null) }
     var pendingMeshPanel by remember { mutableStateOf<Panel?>(null) }
@@ -263,20 +314,25 @@ fun TabbedBrowserScreen(
     val activeTab = tabs.firstOrNull { it.id == activeId }
 
     // Links shared into the app (ACTION_SEND) open the preview sheet.
-    LaunchedEffect(externalPreviewUrl) {
-        val u = externalPreviewUrl ?: return@LaunchedEffect
-        previewUrl = u
+    LaunchedEffect(externalPreviewUrls) {
+        val urls = externalPreviewUrls ?: return@LaunchedEffect
+        when (val a = com.victorious.browser.linkembed.SharedLinks.actionFor(urls)) {
+            is com.victorious.browser.linkembed.SharedLinks.ShareAction.PreviewOne -> { sharedPick = null; previewUrl = a.url }
+            is com.victorious.browser.linkembed.SharedLinks.ShareAction.Pick -> { previewUrl = null; sharedPick = a.urls }
+            com.victorious.browser.linkembed.SharedLinks.ShareAction.NoLinks -> Unit
+        }
         onExternalPreviewConsumed()
     }
 
     // Keep the URL bar in sync with the active tab (follows navigation, like the
     // single-tab screen did).
+    fun displayUrl(url: String?): String = if (isNewTabUrl(url)) "" else (url ?: "")
     LaunchedEffect(activeId, activeTab?.url) {
-        if (!urlFocused) urlBarText = activeTab?.url ?: ""
+        if (!urlFocused) urlBarText = displayUrl(activeTab?.url)
     }
     LaunchedEffect(activeId) {
-        // Switching tabs always shows the new tab's URL.
-        urlBarText = activeTab?.url ?: ""
+        // Switching tabs always shows the new tab's URL (blank on the new-tab page).
+        urlBarText = displayUrl(activeTab?.url)
     }
 
     fun startDownloadImpl(url: String, ua: String?, disposition: String?, mime: String?) {
@@ -322,6 +378,164 @@ fun TabbedBrowserScreen(
         }
     }
 
+
+    fun hostDecision(host: String?, perm: SitePermission, isPrivate: Boolean): PermissionDecision {
+        if (host == null) return PermissionDecision.ASK
+        return if (isPrivate) privateGrants[host]?.get(perm) ?: PermissionDecision.ASK
+        else sitePerms.decision(host, perm)
+    }
+
+    fun setHostDecision(host: String, perm: SitePermission, decision: PermissionDecision, isPrivate: Boolean) {
+        if (isPrivate) {
+            val map = privateGrants.getOrPut(host) { mutableMapOf() }
+            if (decision == PermissionDecision.ASK) map.remove(perm) else map[perm] = decision
+            if (map.isEmpty()) privateGrants.remove(host)
+        } else {
+            sitePerms.set(host, perm, decision)
+        }
+    }
+
+    fun applyJsForHost(wv: WebView, host: String?, isPrivate: Boolean) {
+        val decision = SitePermissionLogic.effective(
+            SitePermission.JAVASCRIPT,
+            hostDecision(host, SitePermission.JAVASCRIPT, isPrivate),
+        )
+        wv.settings.javaScriptEnabled = decision != PermissionDecision.BLOCK
+    }
+
+    fun handleExternalUri(url: String): Boolean {
+        when (val d = ExternalScheme.route(url)) {
+            ExternalScheme.Decision.InApp -> return false
+            is ExternalScheme.Decision.Blocked -> {
+                Toast.makeText(appContext, d.reason, Toast.LENGTH_SHORT).show()
+                return true
+            }
+            is ExternalScheme.Decision.External -> {
+                when (val r = ExternalLaunch.launch(context, url)) {
+                    ExternalLaunch.Result.Launched -> Unit
+                    ExternalLaunch.Result.Failed ->
+                        Toast.makeText(appContext, "No app can open this link", Toast.LENGTH_SHORT).show()
+                    is ExternalLaunch.Result.Fallback -> {
+                        val id = activeId
+                        if (id != null) {
+                            webViews[id]?.let { VictoriousWebViewClient.privacyLoad(it, r.url, id, privacy) }
+                                ?: run { tabStore.updateUrl(id, r.url) }
+                        } else {
+                            tabStore.openTab(r.url)
+                        }
+                    }
+                }
+                return true
+            }
+            is ExternalScheme.Decision.Confirm -> {
+                pendingExternalUrl = url
+                return true
+            }
+        }
+    }
+
+    fun handleFileChooser(
+        callback: ValueCallback<Array<Uri>>?,
+        params: WebChromeClient.FileChooserParams?,
+    ): Boolean {
+        // Cancel any previous outstanding picker first (WebView contract).
+        filePathCallback?.onReceiveValue(null)
+        filePathCallback = callback
+        val req = FileChooserLogic.interpret(
+            params?.acceptTypes,
+            params?.mode ?: 0,
+            params?.isCaptureEnabled == true,
+        )
+        return try {
+            if (req.allowMultiple) pickManyFiles.launch(req.mimeType) else pickOneFile.launch(req.mimeType)
+            true
+        } catch (t: Throwable) {
+            filePathCallback = null
+            callback?.onReceiveValue(null)
+            Toast.makeText(appContext, "Can't open file picker: ${t.message}", Toast.LENGTH_SHORT).show()
+            false
+        }
+    }
+
+    fun enterFullscreen(view: View?, callback: WebChromeClient.CustomViewCallback?) {
+        if (view == null || callback == null) {
+            callback?.onCustomViewHidden()
+            return
+        }
+        if (!fullscreenSession.enter(view, callback)) return
+        fullscreenView = view
+        activity?.let { SitesJustWork.enterImmersive(it) }
+    }
+
+    fun exitFullscreen(fromPage: Boolean = false) {
+        if (fromPage) fullscreenSession.onHiddenByPage() else fullscreenSession.exit()
+        fullscreenView = null
+        activity?.let { SitesJustWork.exitImmersive(it) }
+    }
+
+    fun handlePermissionRequest(request: PermissionRequest?) {
+        if (request == null) return
+        val host = SitePermissionLogic.hostKey(request.origin?.toString())
+            ?: run { request.deny(); return }
+        val isPrivate = tabStore.activeTab()?.incognito == true
+        val resolved = SitesJustWork.resolvePermissionRequest(
+            host = host,
+            resources = request.resources,
+            isPrivate = isPrivate,
+            persisted = { sitePerms.decision(host, it) },
+            transient = { privateGrants[host]?.get(it) ?: PermissionDecision.ASK },
+        )
+        if (resolved != null) {
+            if (resolved.isEmpty()) request.deny() else request.grant(resolved)
+            return
+        }
+        val asked = SitePermissionLogic.permissionsForResources(request.resources).toList()
+        // Need Android runtime perms before we can grant.
+        val needed = SitesJustWork.androidPermissionsFor(asked)
+        if (activity != null && needed.isNotEmpty() && !SitesJustWork.hasAll(activity, needed)) {
+            requestRuntimePerms.launch(needed)
+        }
+        pendingSitePrompt = PendingSitePrompt.Media(host, asked, request, isPrivate)
+    }
+
+    fun handleGeoPrompt(origin: String?, callback: GeolocationPermissions.Callback?) {
+        if (callback == null) return
+        val host = SitePermissionLogic.hostKey(origin) ?: run {
+            callback.invoke(origin, false, false); return
+        }
+        val isPrivate = tabStore.activeTab()?.incognito == true
+        when (SitesJustWork.resolveGeo(
+            host, isPrivate,
+            persisted = { sitePerms.decision(host, it) },
+            transient = { privateGrants[host]?.get(it) ?: PermissionDecision.ASK },
+        )) {
+            true -> callback.invoke(origin, true, false)
+            false -> callback.invoke(origin, false, false)
+            null -> {
+                val needed = SitesJustWork.androidPermissionsFor(listOf(SitePermission.LOCATION))
+                if (activity != null && !SitesJustWork.hasAll(activity, needed)) {
+                    requestRuntimePerms.launch(needed)
+                }
+                pendingSitePrompt = PendingSitePrompt.Geo(host, origin, callback, isPrivate)
+            }
+        }
+    }
+
+    fun handleRenderGone(tabId: String, crashed: Boolean) {
+        // Destroy the dead WebView; keep the tab metadata so the user can Reload.
+        webViews.remove(tabId)?.let { wv ->
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            runCatching { wv.destroy() }
+        }
+        favicons.remove(tabId); progressMap.remove(tabId); loadingMap.remove(tabId); certs.remove(tabId)
+        crashedTabs[tabId] = RenderGoneLogic.message(crashed)
+    }
+
+
+    // Mutable so buildWebView (which needs the callback) and the implementation
+    // (which needs buildWebView) can close over each other.
+    var handleCreateWindow: (Boolean, Message?) -> Boolean = { _, _ -> false }
+
     fun buildWebView(tabId: String, initialUrl: String): WebView =
         WebView(appContext).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -343,8 +557,14 @@ fun TabbedBrowserScreen(
             webViewClient = VictoriousWebViewClient(
                 onUrlChanged = { url ->
                     if (readerTabs.onUrlChanged(tabId, url)) readerVersion++
-                    tabStore.updateUrl(tabId, url)
+                    val keepNewTab = isNewTabUrl(tabStore.get(tabId)?.url) &&
+                        (url.equals("about:blank", ignoreCase = true) || url.isBlank())
+                    if (!keepNewTab) tabStore.updateUrl(tabId, url)
                     tabStore.updateNav(tabId, canGoBack(), canGoForward())
+                    // Per-site JavaScript on/off.
+                    applyJsForHost(this, SitePermissionLogic.hostKey(url), tabStore.get(tabId)?.incognito == true)
+                    // A successful navigation clears any crash banner for this tab.
+                    crashedTabs.remove(tabId)
                 },
                 onLoadingChanged = { loading ->
                     loadingMap[tabId] = loading
@@ -353,7 +573,8 @@ fun TabbedBrowserScreen(
                         certs[tabId] = certificate
                         val u = url.orEmpty()
                         val skipHistory = readerTabs.isActive(tabId) ||
-                            tabStore.get(tabId)?.incognito == true
+                            tabStore.get(tabId)?.incognito == true ||
+                            isNewTabUrl(u) || u.equals("about:blank", ignoreCase = true)
                         if (!skipHistory) historyStore.record(u, title.orEmpty())
                     }
                 },
@@ -363,6 +584,8 @@ fun TabbedBrowserScreen(
                 tabId = tabId,
                 privacy = privacy,
                 privacyStartJs = privacyStartJs,
+                onExternalUri = { u -> handleExternalUri(u) },
+                onRenderGone = { crashed -> handleRenderGone(tabId, crashed) },
             )
             webChromeClient = VictoriousWebChromeClient(
                 onProgressChanged = { p ->
@@ -379,6 +602,12 @@ fun TabbedBrowserScreen(
                 onConsoleMessage = { level, message, source, line ->
                     appendConsole(tabId, level, message, source, line)
                 },
+                fileChooser = { cb, params -> handleFileChooser(cb, params) },
+                showCustomView = { v, cb -> enterFullscreen(v, cb) },
+                hideCustomView = { exitFullscreen(fromPage = true) },
+                permissionRequest = { req -> handlePermissionRequest(req) },
+                geoPrompt = { origin, cb -> handleGeoPrompt(origin, cb) },
+                createWindow = { gesture, msg -> handleCreateWindow(gesture, msg) },
             )
             setDownloadListener { dUrl, ua, disposition, mime, _ ->
                 startDownloadImpl(dUrl, ua, disposition, mime)
@@ -388,6 +617,7 @@ fun TabbedBrowserScreen(
                 val hit = wv.hitTestResult
                 when (hit.type) {
                     WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                        longPressImage = null
                         hit.extra?.let { linkMenu = it to false }
                         hit.extra != null
                     }
@@ -396,14 +626,49 @@ fun TabbedBrowserScreen(
                         val msg = Handler(Looper.getMainLooper()).obtainMessage()
                         wv.requestFocusNodeHref(msg)
                         val href = msg.data.getString("url")?.takeIf { it.isNotBlank() }
+                        longPressImage = hit.extra
                         (href ?: hit.extra)?.let { linkMenu = it to (href == null) }
                         true
+                    }
+                    WebView.HitTestResult.IMAGE_TYPE -> {
+                        // A plain (un-linked) image: offer the image menu with reverse search.
+                        longPressImage = hit.extra
+                        hit.extra?.let { linkMenu = it to true }
+                        hit.extra != null
                     }
                     else -> false // let WebView handle text selection etc.
                 }
             }
-            VictoriousWebViewClient.privacyLoad(this, initialUrl, tabId, privacy)
+            val loadUrl = if (isNewTabUrl(initialUrl)) "about:blank" else initialUrl
+            applyJsForHost(this, SitePermissionLogic.hostKey(loadUrl), privateTab)
+            VictoriousWebViewClient.privacyLoad(this, loadUrl, tabId, privacy)
         }
+
+
+
+
+    handleCreateWindow = fun(isUserGesture: Boolean, resultMsg: Message?): Boolean {
+        val openerId = activeId
+        val openerUrl = openerId?.let { tabStore.get(it)?.url }
+        val host = SitePermissionLogic.hostKey(openerUrl)
+        val siteSetting = hostDecision(host, SitePermission.POPUPS, tabStore.activeTab()?.incognito == true)
+        val once = host != null && host in allowOncePopups.value
+        return when (val d = PopupPolicy.decide(isUserGesture, siteSetting, once, host)) {
+            PopupPolicy.Decision.Allow -> {
+                if (host != null) allowOncePopups.value = allowOncePopups.value - host
+                val newId = tabStore.openTab(url = "about:blank", activate = true, incognito = tabStore.activeTab()?.incognito == true)
+                val wv = webViews.getOrPut(newId) { buildWebView(newId, "about:blank") }
+                val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                transport.webView = wv
+                resultMsg.sendToTarget()
+                true
+            }
+            is PopupPolicy.Decision.Block -> {
+                popupBlockedHost = d.host
+                false
+            }
+        }
+    }
 
     fun destroyTab(id: String) {
         webViews.remove(id)?.let { wv ->
@@ -499,7 +764,7 @@ fun TabbedBrowserScreen(
         Toast.makeText(appContext, toast, Toast.LENGTH_SHORT).show()
     }
 
-    fun currentUrl(): String = activeTab?.url?.takeIf { it.isNotBlank() } ?: urlBarText
+    fun currentUrl(): String = activeTab?.url?.takeIf { it.isNotBlank() && !isNewTabUrl(it) } ?: urlBarText
 
     fun shareUrl() {
         val url = currentUrl()
@@ -624,14 +889,16 @@ fun TabbedBrowserScreen(
         }
     }
 
-    // Back priority: close find bar → dismiss address-bar editing → page back → launcher.
-    BackHandler(enabled = showFind || urlFocused || (activeTab?.canGoBack == true) || onBackToLauncher != null) {
+    // Back priority: exit fullscreen → close find/tools → dismiss address-bar editing → page back.
+    // The browser IS the home screen, so Back never leaves the app from here.
+    BackHandler(enabled = fullscreenSession.isActive || showTools || showFind || urlFocused || (activeTab?.canGoBack == true)) {
         val id = activeId
         when {
+            fullscreenSession.isActive -> exitFullscreen()
+            showTools -> showTools = false
             showFind -> closeFind()
             urlFocused -> focusManager.clearFocus()
             id != null && webViews[id]?.canGoBack() == true -> webViews[id]?.goBack()
-            else -> onBackToLauncher?.invoke()
         }
     }
 
@@ -677,17 +944,15 @@ fun TabbedBrowserScreen(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (onBackToLauncher != null) {
-                Box(
-                    Modifier
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .clickable(onClick = onBackToLauncher)
-                        .padding(4.dp),
-                ) {
-                    com.victorious.browser.ui.components.BrandRing(size = 30.dp, strokeWidth = 3.dp, glow = false)
-                }
-                Spacer(Modifier.width(6.dp))
+            Box(
+                Modifier
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable(onClick = { showTools = true })
+                    .padding(4.dp),
+            ) {
+                com.victorious.browser.ui.components.BrandRing(size = 30.dp, strokeWidth = 3.dp, glow = false)
             }
+            Spacer(Modifier.width(6.dp))
             OutlinedTextField(
                 value = urlBarText,
                 onValueChange = { urlBarText = it },
@@ -772,8 +1037,13 @@ fun TabbedBrowserScreen(
             val tls = tlsHint(curUrl, cert?.issuedBy?.cName, proxyOn)
             if (tls != null) {
                 ReconChip(tls.label, if (tls.warn) NeonMagenta else NeonCyan) {
-                    if (cert != null) showCertInfo = true
+                    showSiteSettings = true
                 }
+            } else if (!isNewTabUrl(curUrl) && curUrl.isNotBlank()) {
+                ReconChip("SITE", NeonCyan) { showSiteSettings = true }
+            }
+            popupBlockedHost?.let { _ ->
+                ReconChip("Pop-up blocked", NeonMagenta) { showPopupBlockedDialog = true }
             }
             val jsErrors = activeId?.let { ConsoleLog.errorCount(consoleLogs[it].orEmpty()) } ?: 0
             if (jsErrors > 0) {
@@ -870,10 +1140,11 @@ fun TabbedBrowserScreen(
                             activeHost?.let { h -> if (fp) privacy.removeFireproof(fireproofHosts.firstOrNull { f -> h == f || h.endsWith(".$f") } ?: h) else privacy.addFireproof(h) }
                         }
                         item("Privacy protections…") { showPrivacySettings = true }
+                        item("Site settings…", enabled = !isNewTabUrl(currentUrl()) && currentUrl().isNotBlank()) { showSiteSettings = true }
                         HorizontalDivider()
                         item("Recon tools ▸", keepOpen = true) { menuRecon = true }
                         item("Search engine: ${searchEngine.label}") { showEngineDialog = true }
-                        if (onBackToLauncher != null) item("All tools (launcher)") { onBackToLauncher() }
+                        item("Fleet tools…") { showTools = true }
                     } else {
                         item("◂ Back", keepOpen = true) { menuRecon = false }
                         HorizontalDivider()
@@ -981,36 +1252,86 @@ fun TabbedBrowserScreen(
 
         // WebView host: a single container; we attach the active tab's WebView and
         // keep inactive ones alive (detached) so their state is preserved.
-        AndroidView(
-            factory = { ctx ->
-                FrameLayout(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    )
-                }
-            },
-            update = { container ->
-                val id = activeId
-                if (id == null) {
-                    container.removeAllViews()
-                    return@AndroidView
-                }
-                val wv = webViews.getOrPut(id) {
-                    buildWebView(id, tabStore.get(id)?.url ?: HOME_URL)
-                }
-                // Night mode is a global toggle: keep every live tab in sync.
-                webViews.values.forEach { applyNightMode(it, nightMode) }
-                val current = container.getChildAt(0)
-                if (current !== wv) {
-                    (wv.parent as? ViewGroup)?.removeView(wv)
-                    container.removeAllViews()
-                    container.addView(wv)
-                }
-            },
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
                 .weight(1f),
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    FrameLayout(ctx).apply {
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
+                    }
+                },
+                update = { container ->
+                    val id = activeId
+                    if (id == null) {
+                        container.removeAllViews()
+                        return@AndroidView
+                    }
+                    val wv = webViews.getOrPut(id) {
+                        buildWebView(id, tabStore.get(id)?.url ?: HOME_URL)
+                    }
+                    // Night mode is a global toggle: keep every live tab in sync.
+                    webViews.values.forEach { applyNightMode(it, nightMode) }
+                    val current = container.getChildAt(0)
+                    if (current !== wv) {
+                        (wv.parent as? ViewGroup)?.removeView(wv)
+                        container.removeAllViews()
+                        container.addView(wv)
+                    }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (isNewTabUrl(activeTab?.url)) {
+                NewTabPage(
+                    isPrivate = activeTab?.incognito == true,
+                    onOpenTool = { id -> onOpenTool?.invoke(id) },
+                    onShowAllTools = { showTools = true },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            // Renderer-crash recovery: keep the tab, offer Reload.
+            val crashId = activeId
+            val crashMsg = crashId?.let { crashedTabs[it] }
+            if (crashId != null && crashMsg != null) {
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(crashMsg, style = MaterialTheme.typography.titleMedium, color = NeonMagenta)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "The page's renderer stopped. Reloading opens it in a fresh WebView.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    TextButton(
+                        onClick = {
+                            crashedTabs.remove(crashId)
+                            val url = tabStore.get(crashId)?.url ?: HOME_URL
+                            webViews[crashId] = buildWebView(crashId, url)
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = NeonCyan),
+                    ) { Text("Reload") }
+                }
+            }
+        }
+    }
+
+    if (showTools) {
+        ToolsSheet(
+            onOpen = { id -> onOpenTool?.invoke(id) },
+            onDismiss = { showTools = false },
+            onSiteSettings = { showSiteSettings = true },
         )
     }
 
@@ -1135,6 +1456,25 @@ fun TabbedBrowserScreen(
             onDownload = {
                 startDownloadImpl(url, activeId?.let { webViews[it]?.settings?.userAgentString }, null, null)
             },
+            onReverseImage = longPressImage
+                ?.takeIf { com.victorious.browser.osint.research.ReverseImage.isShareableImageUrl(it) }
+                ?.let { src ->
+                    {
+                        com.victorious.browser.osint.research.ResearchHandoff.reverseImage(src, activeTab?.incognito == true)
+                        onOpenTool?.invoke("research")
+                        Unit
+                    }
+                },
+        )
+    }
+
+    val pickList = sharedPick
+    if (pickList != null && previewUrl == null) {
+        com.victorious.browser.linkembed.SharedLinkPickerDialog(
+            urls = pickList,
+            onPick = { previewUrl = it },
+            onCopyAll = { copyText(pickList.joinToString("\n"), "Copied ${pickList.size} links") },
+            onDismiss = { sharedPick = null },
         )
     }
 
@@ -1143,8 +1483,9 @@ fun TabbedBrowserScreen(
             initialUrl = target,
             isPrivate = activeTab?.incognito == true,
             onDismiss = { previewUrl = null },
-            onOpen = { u -> doOpenUrl(u, newTab = false) },
-            onOpenNewTab = { u -> doOpenUrl(u, newTab = true) },
+            // Opening a link leaves the share flow; closing the sheet returns to the picker.
+            onOpen = { u -> sharedPick = null; doOpenUrl(u, newTab = false) },
+            onOpenNewTab = { u -> sharedPick = null; doOpenUrl(u, newTab = true) },
             onCopy = { text, toast -> copyText(text, toast) },
         )
     }
@@ -1306,6 +1647,165 @@ fun TabbedBrowserScreen(
                 }) { Text("Dismiss", color = NeonMagenta) }
             },
         )
+    }
+
+    // ---- Round 1 overlays / dialogs ----
+    if (showSiteSettings) {
+        SiteSettingsSheet(
+            host = SitePermissionLogic.hostKey(currentUrl()),
+            store = sitePerms,
+            onDismiss = {
+                showSiteSettings = false
+                // Live-apply JavaScript change to the active tab.
+                val id = activeId ?: return@SiteSettingsSheet
+                webViews[id]?.let { applyJsForHost(it, SitePermissionLogic.hostKey(currentUrl()), tabStore.get(id)?.incognito == true) }
+            },
+        )
+    }
+
+    pendingSitePrompt?.let { prompt ->
+        val (host, perms, isPrivate) = when (prompt) {
+            is PendingSitePrompt.Media -> Triple(prompt.host, prompt.permissions, prompt.isPrivate)
+            is PendingSitePrompt.Geo -> Triple(prompt.host, listOf(SitePermission.LOCATION), prompt.isPrivate)
+        }
+        SitePermissionPromptDialog(
+            host = host,
+            permissions = perms,
+            isPrivate = isPrivate,
+            onChoice = { choice ->
+                when (prompt) {
+                    is PendingSitePrompt.Media -> {
+                        val persist = SitesJustWork.applyPermissionChoice(prompt.request, choice, prompt.isPrivate)
+                        // Always / Block persist on non-private tabs; Allow once grants now and stores nothing.
+                        if (persist != null) perms.forEach { setHostDecision(host, it, persist, isPrivate = false) }
+                    }
+                    is PendingSitePrompt.Geo -> {
+                        val persist = SitesJustWork.applyGeoChoice(prompt.origin, prompt.callback, choice, prompt.isPrivate)
+                        if (persist != null) setHostDecision(host, SitePermission.LOCATION, persist, isPrivate = false)
+                    }
+                }
+                pendingSitePrompt = null
+            },
+            onDismiss = {
+                when (prompt) {
+                    is PendingSitePrompt.Media -> prompt.request.deny()
+                    is PendingSitePrompt.Geo -> prompt.callback.invoke(prompt.origin, false, false)
+                }
+                pendingSitePrompt = null
+            },
+        )
+    }
+
+
+    if (showPopupBlockedDialog) {
+        val host = popupBlockedHost
+        AlertDialog(
+            onDismissRequest = { showPopupBlockedDialog = false },
+            title = { Text("Pop-up blocked", color = NeonMagenta) },
+            text = {
+                Text(
+                    if (host.isNullOrBlank()) "A page tried to open a pop-up."
+                    else "$host tried to open a pop-up window.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (!host.isNullOrBlank()) {
+                        allowOncePopups.value = allowOncePopups.value + host
+                        Toast.makeText(appContext, "Pop-ups allowed once for $host", Toast.LENGTH_SHORT).show()
+                    }
+                    popupBlockedHost = null
+                    showPopupBlockedDialog = false
+                }) { Text("Allow once", color = NeonCyan) }
+            },
+            dismissButton = {
+                Row {
+                    if (!host.isNullOrBlank() && tabStore.activeTab()?.incognito != true) {
+                        TextButton(onClick = {
+                            sitePerms.set(host, SitePermission.POPUPS, PermissionDecision.ALLOW)
+                            Toast.makeText(appContext, "Pop-ups always allowed for $host", Toast.LENGTH_SHORT).show()
+                            popupBlockedHost = null
+                            showPopupBlockedDialog = false
+                        }) { Text("Always for site", color = NeonCyan) }
+                    }
+                    TextButton(onClick = {
+                        showPopupBlockedDialog = false
+                        popupBlockedHost = null
+                    }) { Text("Keep blocked", color = NeonMagenta) }
+                }
+            },
+        )
+    }
+
+    pendingExternalUrl?.let { url ->
+        val scheme = ExternalScheme.schemeOf(url) ?: "?"
+        ExternalLinkConfirmDialog(
+            scheme = scheme,
+            onOpen = {
+                pendingExternalUrl = null
+                when (val r = ExternalLaunch.launch(context, url)) {
+                    ExternalLaunch.Result.Launched -> Unit
+                    ExternalLaunch.Result.Failed ->
+                        Toast.makeText(appContext, "No app can open this link", Toast.LENGTH_SHORT).show()
+                    is ExternalLaunch.Result.Fallback -> {
+                        val id = activeId
+                        if (id != null) webViews[id]?.let { VictoriousWebViewClient.privacyLoad(it, r.url, id, privacy) }
+                        else tabStore.openTab(r.url)
+                    }
+                }
+            },
+            onDismiss = { pendingExternalUrl = null },
+        )
+    }
+
+    // HTML5 fullscreen video overlay (covers the whole browser chrome).
+    val fsView = fullscreenView
+    if (fsView != null) {
+        AndroidView(
+            factory = { ctx ->
+                android.widget.FrameLayout(ctx).apply {
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    )
+                }
+            },
+            update = { container ->
+                if (fsView.parent !== container) {
+                    (fsView.parent as? ViewGroup)?.removeView(fsView)
+                    container.removeAllViews()
+                    container.addView(
+                        fsView,
+                        ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+
+    // Optional PiP: when the user leaves the app while a video is fullscreen, try PiP.
+    androidx.compose.runtime.DisposableEffect(fullscreenView, activity) {
+        val act = activity
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE &&
+                fullscreenSession.isActive &&
+                act != null &&
+                SitesJustWork.canEnterPip(act) &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ) {
+                runCatching {
+                    act.enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+                }
+            }
+        }
+        val lifecycle = (act as? androidx.lifecycle.LifecycleOwner)?.lifecycle
+        lifecycle?.addObserver(observer)
+        onDispose { lifecycle?.removeObserver(observer) }
     }
 }
 

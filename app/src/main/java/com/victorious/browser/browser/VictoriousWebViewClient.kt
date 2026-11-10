@@ -21,6 +21,8 @@ import com.victorious.browser.netid.NetIdSettings
 import com.victorious.browser.netid.SpoofInjector
 import com.victorious.browser.antiphish.AntiPhishController
 import android.net.http.SslError
+import android.os.Build
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import com.victorious.browser.browser.privacy.Gpc
 import com.victorious.browser.browser.privacy.HostUtil
@@ -57,6 +59,13 @@ class VictoriousWebViewClient(
     private val privacy: PrivacySettings? = null,
     /** JS installed at document start by [PrivacyInjector.installDocumentStart]. */
     private val privacyStartJs: String = "",
+    /**
+     * A non-http(s) navigation (mailto:, tel:, intent:, custom scheme, …). Return true
+     * when handled (launch / confirm / block) so the WebView does not try to load it.
+     */
+    private val onExternalUri: (url: String) -> Boolean = { false },
+    /** The renderer for this tab died; destroy the WebView and show a crash state. */
+    private val onRenderGone: (crashed: Boolean) -> Unit = {},
 ) : WebViewClient() {
 
     /** Host of the top-level page, read from the network thread in [shouldInterceptRequest]. */
@@ -128,7 +137,10 @@ class VictoriousWebViewClient(
             // Load inside this WebView.
             false
         } else {
-            // Non-http(s) schemes (intent:, market:, tel:, …) — ignore for now.
+            // Non-http(s) schemes (mailto:, tel:, intent:, custom app links, …): hand off
+            // to the host, which launches / confirms / blocks. Always override so the
+            // WebView never tries to load an unknown scheme itself.
+            onExternalUri(uri.toString())
             true
         }
     }
@@ -139,6 +151,7 @@ class VictoriousWebViewClient(
         return if (lower.startsWith("http://") || lower.startsWith("https://")) {
             false
         } else {
+            onExternalUri(url)
             true
         }
     }
@@ -214,6 +227,13 @@ class VictoriousWebViewClient(
         failedHttpsHosts.add(host)
         view.post { view.loadUrl("http://" + url.removePrefix("https://")) }
         return true
+    }
+
+    override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
+        val crashed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) detail?.didCrash() ?: true else true
+        onRenderGone(crashed)
+        // Returning true tells WebView we handled it so the whole app isn't killed.
+        return RenderGoneLogic.HANDLED
     }
 
     companion object {

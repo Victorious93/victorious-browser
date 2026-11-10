@@ -1,5 +1,11 @@
 package com.victorious.browser.browser
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.widget.Toast
@@ -54,6 +60,7 @@ import com.victorious.browser.userscript.UserScriptStore
 import com.victorious.browser.webext.ExtensionEngine
 import com.victorious.browser.antiphish.AntiPhishController
 import com.victorious.browser.antiphish.AntiPhishWarningBanner
+import com.victorious.browser.linkembed.LinkPreviewSheet
 
 private const val HOME_URL = "https://example.com"
 
@@ -88,6 +95,8 @@ fun BrowserScreen(
     var readerMode by remember { mutableStateOf(false) }
     var showUrlTools by remember { mutableStateOf(false) }
     var showInject by remember { mutableStateOf(false) }
+    var linkMenu by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var previewUrl by remember { mutableStateOf<String?>(null) }
 
     val antiPhish = remember { AntiPhishController.get(appContext) }
     val phishResult by antiPhish.lastResult.collectAsState()
@@ -367,6 +376,24 @@ fun BrowserScreen(
                         },
                         onTitleChanged = { title -> pageTitle = title },
                     )
+                    setOnLongClickListener { v ->
+                        val wv = v as WebView
+                        val hit = wv.hitTestResult
+                        when (hit.type) {
+                            WebView.HitTestResult.SRC_ANCHOR_TYPE -> {
+                                hit.extra?.let { linkMenu = it to false }
+                                hit.extra != null
+                            }
+                            WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE -> {
+                                val msg = Handler(Looper.getMainLooper()).obtainMessage()
+                                wv.requestFocusNodeHref(msg)
+                                val href = msg.data.getString("url")?.takeIf { it.isNotBlank() }
+                                (href ?: hit.extra)?.let { linkMenu = it to (href == null) }
+                                true
+                            }
+                            else -> false
+                        }
+                    }
                     webViewRef = this
                     loadUrl(initialUrl)
                 }
@@ -379,6 +406,43 @@ fun BrowserScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
+        )
+    }
+
+    fun copyText(text: String, toast: String = "Copied") {
+        val cm = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        cm?.setPrimaryClip(ClipData.newPlainText("link", text))
+        Toast.makeText(appContext, toast, Toast.LENGTH_SHORT).show()
+    }
+    fun shareText(text: String) {
+        val send = Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text) }
+        runCatching { appContext.startActivity(Intent.createChooser(send, "Share link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+            .onFailure { Toast.makeText(appContext, "No app available to share", Toast.LENGTH_SHORT).show() }
+    }
+
+    linkMenu?.let { (url, isImage) ->
+        LinkMenuDialog(
+            url = url,
+            isImage = isImage,
+            onDismiss = { linkMenu = null },
+            onOpen = { navigateTo(url) },
+            onOpenNewTab = { navigateTo(url) }, // single-tab sandbox: open in place
+            onOpenBackground = { navigateTo(url) },
+            onCopy = { copyText(url) },
+            onPreview = { previewUrl = url },
+            onShare = { shareText(url) },
+            onBookmark = { Toast.makeText(appContext, "Bookmarks live in the main browser", Toast.LENGTH_SHORT).show() },
+            onDownload = { Toast.makeText(appContext, "Downloads live in the main browser", Toast.LENGTH_SHORT).show() },
+        )
+    }
+    previewUrl?.let { target ->
+        LinkPreviewSheet(
+            initialUrl = target,
+            isPrivate = false,
+            onDismiss = { previewUrl = null },
+            onOpen = { u -> navigateTo(u) },
+            onOpenNewTab = { u -> navigateTo(u) },
+            onCopy = { text, toast -> copyText(text, toast) },
         )
     }
 

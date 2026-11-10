@@ -24,6 +24,34 @@ object SharedLinks {
         return out.toList()
     }
 
+    /**
+     * What a share-in should do with the extracted URLs: nothing, preview the single
+     * link directly, or let the user pick from several.
+     */
+    sealed class ShareAction {
+        data object NoLinks : ShareAction()
+        data class PreviewOne(val url: String) : ShareAction()
+        data class Pick(val urls: List<String>) : ShareAction()
+    }
+
+    fun actionFor(urls: List<String>): ShareAction = when (urls.size) {
+        0 -> ShareAction.NoLinks
+        1 -> ShareAction.PreviewOne(urls.first())
+        else -> ShareAction.Pick(urls)
+    }
+
+    /**
+     * Compact two-part label for the link picker: host (without `www.`) and the rest
+     * (path + query, ellipsized to [maxRest] chars). Falls back to the raw string.
+     */
+    fun displayLabel(url: String, maxRest: Int = 60): Pair<String, String> {
+        val m = Regex("""(?i)^https?://([^/?#]+)(.*)$""").find(url) ?: return url to ""
+        val host = m.groupValues[1].removePrefix("www.").removePrefix("WWW.")
+        var rest = m.groupValues[2].takeIf { it != "/" }.orEmpty()
+        if (rest.length > maxRest) rest = rest.take((maxRest - 1).coerceAtLeast(1)) + "…"
+        return host to rest
+    }
+
     /** ACTION_VIEW: the data URI only if it is a safe http(s) URL. */
     fun fromView(dataString: String?): String? = UrlSafety.sanitize(dataString)
 

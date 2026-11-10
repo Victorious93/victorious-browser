@@ -20,6 +20,8 @@ class EmbedViewerHtmlTest {
         assertEquals(EmbedViewerHtml.Plan.FrameUrl("https://www.youtube.com/embed/abc", viaOEmbed = true), plan)
         val doc = EmbedViewerHtml.document(plan, "t")!!
         assertTrue(doc.contains("sandbox=\"allow-scripts allow-same-origin allow-presentation allow-popups\""))
+        assertTrue(doc.contains("allowfullscreen"))
+        assertTrue(doc.contains("fullscreen"))
         assertFalse(doc.contains("allow-top-navigation"))
         assertTrue(doc.contains("Content-Security-Policy"))
     }

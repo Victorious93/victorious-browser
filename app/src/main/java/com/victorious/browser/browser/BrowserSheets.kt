@@ -338,6 +338,7 @@ internal fun LinkMenuDialog(
     onBookmark: () -> Unit,
     onDownload: () -> Unit,
     onPreview: (() -> Unit)? = null,
+    onReverseImage: (() -> Unit)? = null,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -362,6 +363,7 @@ internal fun LinkMenuDialog(
                 item("Share link", onShare)
                 item("Bookmark link", onBookmark)
                 item(if (isImage) "Download image" else "Download link", onDownload)
+                if (onReverseImage != null) item("Reverse image search", onReverseImage)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
