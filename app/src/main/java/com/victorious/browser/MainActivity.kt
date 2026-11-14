@@ -31,6 +31,7 @@ import com.victorious.browser.browser.TabbedBrowserScreen
 import com.victorious.browser.inspect.CapturedExchange
 import com.victorious.browser.linkembed.SharedLinks
 import com.victorious.browser.headscale.HeadscaleScreen
+import com.victorious.browser.victorlinux.VictorLinuxScreen
 import com.victorious.browser.inspect.NetworkHistoryScreen
 import com.victorious.browser.help.HelpScreen
 import com.victorious.browser.home.HomeScreen
@@ -167,6 +168,7 @@ internal sealed class AppDestination {
     data object Help : AppDestination()
     data object WireGuard : AppDestination()
     data object Headscale : AppDestination()
+    data object VictorLinux : AppDestination()
 }
 
 @Composable
@@ -282,6 +284,7 @@ fun VictoriousBrowserApp(
                 onOpenExtensions = { openTool(AppDestination.Extensions) },
                 onOpenWireGuard = { openTool(AppDestination.WireGuard) },
                 onOpenHeadscale = { openTool(AppDestination.Headscale) },
+                onOpenVictorLinux = { openTool(AppDestination.VictorLinux) },
                 onBack = { backFromTool() },
             )
             AppDestination.Home -> HomeScreen(
@@ -401,6 +404,10 @@ fun VictoriousBrowserApp(
                 modifier = pad,
                 onBack = { backFromTool() },
             )
+            AppDestination.VictorLinux -> VictorLinuxScreen(
+                modifier = pad,
+                onBack = { backFromTool() },
+            )
         }
         }
         }
@@ -432,6 +439,7 @@ internal fun toolDestination(id: String): AppDestination = when (id) {
     "help" -> AppDestination.Help
     "wireguard" -> AppDestination.WireGuard
     "headscale" -> AppDestination.Headscale
+    "victorlinux" -> AppDestination.VictorLinux
     else -> AppDestination.Browser
 }
 

@@ -45,6 +45,7 @@ object ToolsCatalog {
                 Tool("netid", "Net ID / Spoof", "UA, MAC & geo identity"),
                 Tool("wireguard", "WireGuard", "VPN tunnel"),
                 Tool("headscale", "Headscale", "Tailscale control plane"),
+                Tool("victorlinux", "VictorLinux PC", "Companion: status, model fit, chat"),
                 Tool("fleet", "Fleet control", "Bridge & fleet ops"),
             ),
         ),

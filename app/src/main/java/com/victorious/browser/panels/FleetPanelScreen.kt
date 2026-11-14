@@ -104,6 +104,7 @@ fun FleetPanelScreen(
     onOpenExtensions: () -> Unit = {},
     onOpenWireGuard: () -> Unit = {},
     onOpenHeadscale: () -> Unit = {},
+    onOpenVictorLinux: () -> Unit = {},
     /** When set (browser-first nav), shows a Back → browser chip in the hero. */
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -249,6 +250,12 @@ fun FleetPanelScreen(
             listOf(
                 Tool("WireGuard", "VPN client (conflicts with Mesh)", Icons.Filled.Lock, violet, onOpenWireGuard),
                 Tool("Headscale", "Control-server API settings", Icons.Filled.Settings, violet, onOpenHeadscale),
+            ),
+        ),
+        ToolGroup(
+            "VictorLinux",
+            listOf(
+                Tool("VictorLinux PC", "Companion: status, model fit, chat", Icons.Filled.Home, cyan, onOpenVictorLinux),
             ),
         ),
     )
