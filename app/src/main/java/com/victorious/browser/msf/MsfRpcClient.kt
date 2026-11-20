@@ -71,6 +71,12 @@ class MsfRpcClient(
     fun call(method: String, args: List<Any?>): CallResult = rawCall(method, args)
 
     private fun rawCall(method: String, args: List<Any?>): CallResult {
+        if (!ssl && !com.victorious.browser.export.EndpointSecurity.isPrivateHost(host)) {
+            return CallResult(
+                ok = false, value = null,
+                error = "Refusing plain-http msfrpcd to a non-private host (credentials would be sent in clear). Enable SSL or use a LAN/VPN address.",
+            )
+        }
         return try {
             val body = MsfProtocol.encodeCall(method, token, args)
             val url = URL(endpoint)

@@ -34,7 +34,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -272,9 +277,49 @@ fun PrivacySettingsSheet(settings: PrivacySettings, onDismiss: () -> Unit) {
             Title("Tracker blocking exceptions")
             if (allow.isEmpty()) Text("None. Add one from the shield on any page.", style = MaterialTheme.typography.bodySmall)
             allow.sorted().forEach { h -> HostRow(h) { settings.setAllowed(h, false) } }
+            HorizontalDivider(Modifier.padding(vertical = 10.dp))
+            TrackerUpdateSection()
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+/** Optional: fetch extra tracker hosts from a user-supplied https URL (no default, no backend). */
+@Composable
+private fun TrackerUpdateSection() {
+    val ctx = LocalContext.current
+    val store = remember { TrackerListStore.get(ctx) }
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf(store.url) }
+    var status by remember { mutableStateOf(store.status()) }
+    var busy by remember { mutableStateOf(false) }
+    Title("Tracker list update (optional)")
+    Text(
+        "Adds hosts to the bundled list from an https URL you trust (JSON, see docs/MANUAL.md). Nothing is fetched until you tap Update. Updates only ever add blocked hosts.",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    OutlinedTextField(
+        value = url, onValueChange = { url = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+        label = { Text("https://…/trackers.json") },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TextButton(enabled = !busy, onClick = {
+            store.url = url
+            busy = true
+            status = "Fetching…"
+            scope.launch {
+                val r = withContext(Dispatchers.IO) { store.fetch() }
+                status = r.fold(
+                    onSuccess = { "Updated: ${it.count} hosts" + if (it.rejected > 0) " (${it.rejected} invalid entries skipped)" else "" },
+                    onFailure = { "Update failed: ${it.message ?: it.javaClass.simpleName}" },
+                )
+                busy = false
+            }
+        }) { Text("Update now", color = NeonCyan) }
+        TextButton(enabled = !busy, onClick = { store.clear(); status = store.status() }) { Text("Remove update", color = NeonMagenta) }
+    }
+    Text(status, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable

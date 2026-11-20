@@ -57,12 +57,30 @@ object TrackerList {
         ),
     )
 
-    /** Category of [host] if it (or a parent domain) is listed. */
+    /**
+     * Extra hosts from a user-fetched update ([TrackerListStore]); merged with [HOSTS],
+     * never replacing it. Swapped atomically.
+     */
+    @Volatile private var extra: Map<TrackerCategory, Set<String>> = emptyMap()
+
+    internal fun setExtra(hosts: Map<TrackerCategory, Set<String>>) { extra = hosts }
+
+    /** Category of [host] if it (or a parent domain) is listed in the bundled list or the update. */
     fun match(host: String?): TrackerCategory? {
         if (host.isNullOrBlank()) return null
         val h = host.lowercase().removeSuffix(".")
-        for ((cat, hosts) in HOSTS) {
-            if (hosts.any { HostUtil.matchesSuffix(h, it) }) return cat
+        val extras = extra
+        // Walk "a.b.c" -> "b.c" -> "c" with set lookups (cost is host depth, not list size).
+        for (cat in TrackerCategory.values()) {
+            val bundled = HOSTS[cat].orEmpty()
+            val added = extras[cat].orEmpty()
+            var cand = h
+            while (true) {
+                if (cand in bundled || cand in added) return cat
+                val dot = cand.indexOf('.')
+                if (dot < 0) break
+                cand = cand.substring(dot + 1)
+            }
         }
         return null
     }

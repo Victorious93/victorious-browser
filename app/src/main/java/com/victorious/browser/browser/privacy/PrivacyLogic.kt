@@ -37,23 +37,15 @@ object HostUtil {
     fun matchesSuffix(host: String, suffix: String): Boolean =
         host == suffix || host.endsWith(".$suffix")
 
-    private val MULTI_PART_TLDS = setOf(
-        "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "co.nz",
-        "com.br", "com.cn", "com.mx", "co.in", "co.za", "com.tr", "com.sg", "com.hk", "co.kr",
-    )
-
     /**
-     * Approximate registrable domain ("eTLD+1"). Uses a small multi-part-TLD table
-     * rather than the full Public Suffix List — good enough for 1st/3rd-party splits,
-     * not for security decisions. IP literals are returned unchanged.
+     * Registrable domain (eTLD+1) from the bundled Public Suffix List ([PublicSuffixes]),
+     * including the PRIVATE section (so `a.github.io` and `b.github.io` are different sites).
+     * IP literals and unparsable input are returned unchanged (lower-cased, no trailing dot).
      */
     fun baseDomain(host: String): String {
         val h = host.lowercase().removeSuffix(".")
         if (isIpLiteral(h)) return h
-        val parts = h.split('.')
-        if (parts.size <= 2) return h
-        val lastTwo = parts.takeLast(2).joinToString(".")
-        return if (lastTwo in MULTI_PART_TLDS) parts.takeLast(3).joinToString(".") else lastTwo
+        return PublicSuffixes.current.registrableDomain(h) ?: h
     }
 
     fun isThirdParty(requestHost: String, pageHost: String?): Boolean =

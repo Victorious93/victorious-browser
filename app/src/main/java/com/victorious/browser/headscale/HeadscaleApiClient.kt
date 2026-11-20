@@ -105,6 +105,9 @@ object HeadscaleApiClient {
         method: String,
         body: String? = null,
     ): Result<String> {
+        com.victorious.browser.export.EndpointSecurity.cleartextProblem(serverUrl)?.let {
+            return Result.failure(IllegalArgumentException(it))
+        }
         return try {
             val connection = URL(serverUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
             connection.requestMethod = method

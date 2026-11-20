@@ -8,6 +8,11 @@ import java.net.URL
  * (intended for the HackerAI-Commander / Pentest-Swarm-AI web APIs), with an
  * optional bearer token.
  *
+ * Security: plain http is only sent to private/loopback/mesh hosts ([EndpointSecurity]);
+ * public hosts need https, since the payload is recon evidence and may carry a bearer token.
+ *
+ * Status: EXPERIMENTAL. The contract below is unconfirmed, so the UI labels this sink as such.
+ *
  * TODO(contract): The exact request path, headers and body shape expected by
  * HackerAI-Commander and Pentest-Swarm-AI are NOT confirmed. The full endpoint
  * URL and auth token are user-supplied via [ExportSettings]; this sink just
@@ -19,11 +24,14 @@ class HttpFleetSink(
     private val bearerToken: String = "",
 ) : FleetSink {
     override val id = "http"
-    override val label = "HTTP (fleet web API)"
+    override val label = "HTTP (fleet web API) - experimental"
 
     override fun send(payload: FleetExportPayload): FleetSink.Result {
         if (endpointUrl.isBlank()) {
             return FleetSink.Result(ok = false, detail = "No endpoint URL configured.")
+        }
+        EndpointSecurity.cleartextProblem(endpointUrl)?.let {
+            return FleetSink.Result(ok = false, detail = it)
         }
         val url = try {
             URL(endpointUrl)

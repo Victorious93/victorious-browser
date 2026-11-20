@@ -1,5 +1,6 @@
 package com.victorious.browser.antiphish
 
+import com.victorious.browser.browser.privacy.PublicSuffixes
 import java.net.IDN
 
 /**
@@ -7,13 +8,6 @@ import java.net.IDN
  * No Android deps — fully unit-tested. Punycode decoding uses java.net.IDN.
  */
 object DomainAnalyzer {
-
-    /** Common multi-label public suffixes (small built-in subset; heuristic, not the full PSL). */
-    private val MULTI_SUFFIXES = setOf(
-        "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz",
-        "co.jp", "ne.jp", "com.br", "com.mx", "co.in", "co.za", "com.cn", "com.tr",
-        "com.sg", "com.hk", "co.kr", "com.ar",
-    )
 
     /** TLDs frequently abused for throwaway phishing hosts (heuristic weighting only). */
     val SUSPICIOUS_TLDS = setOf(
@@ -84,14 +78,11 @@ object DomainAnalyzer {
         return s
     }
 
-    /** Registrable domain (eTLD+1) using a small built-in suffix table. */
+    /** Registrable domain (eTLD+1) from the bundled Public Suffix List. */
     fun registrableDomain(host: String): String {
         val h = normalizeHost(host)
         if (h.isEmpty() || isIpLiteral(h)) return h
-        val labels = h.split('.').filter { it.isNotEmpty() }
-        if (labels.size <= 2) return labels.joinToString(".")
-        val lastTwo = labels.takeLast(2).joinToString(".")
-        return if (lastTwo in MULTI_SUFFIXES) labels.takeLast(3).joinToString(".") else lastTwo
+        return PublicSuffixes.current.registrableDomain(h) ?: h
     }
 
     fun tld(host: String): String = normalizeHost(host).substringAfterLast('.', "")
