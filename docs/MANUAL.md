@@ -552,12 +552,26 @@ Privacy features inspired by privacy-first mobile browsers, in Victorious neon. 
 - **Search**: DuckDuckGo is the default engine. Bangs work in the address bar: `!g`, `!w`, `!b`, `!ddg`, `!gh`, `!yt` (e.g. `!w kotlin` or `kotlin !w`).
 
 **Honest limits**
-- The tracker list is small (~120 hosts), not a full blocklist. First-party and CNAME-cloaked trackers are not caught. The site comparison uses an approximate base-domain rule (no full Public Suffix List).
+- The bundled tracker list is small (~120 hosts), not a full blocklist. First-party and CNAME-cloaked trackers are not caught. You can add hosts from your own https URL (see *Tracker list update* below). The first-party/third-party comparison uses the bundled Public Suffix List (snapshot taken when the app was built; it is not auto-updated), so `a.github.io` and `b.github.io` count as different sites.
 - The GPC header, Referer, param stripping, and HTTPS upgrade apply only to top-level GET navigations the browser issues or re-issues. They don't apply to POST forms, redirects, or subresources (WebView limits). The JS GPC flag applies to every page.
 - Cookie pop-up handling is heuristic. It won't reach cross-origin iframes and doesn't speak the TCF API. Some banners will remain, and some sites may break. Turn it off per need.
 - Fireproofed cookies are preserved by re-writing them. HttpOnly and original expiry attributes are lost (they are re-set as Path=/, 1-year, Secure on https). Cache clearing is always global.
 - Clear on exit can't run if Android kills the process outright. Tabs close the next time the browser screen is shown.
 - Not included: email protection, AI chat, app-level tracking protection VPN, sync.
+
+**Tracker list update (optional).** Privacy protections → *Tracker list update*. Enter an `https://` URL (no default is shipped, nothing is fetched until you tap *Update now*). The file is JSON, at most 512 KB:
+
+```json
+{"version": 3,
+ "advertising": ["ads.example.net"],
+ "analytics": [], "social": [], "session_replay": [], "cryptomining": []}
+```
+
+Entries must be plain hostnames. Public suffixes such as `com` or `co.uk` are rejected, invalid entries are skipped and counted, and an update can only ADD hosts to the bundled list. *Remove update* returns to the bundled list.
+
+**Plain-http safety.** The browser itself still loads http pages (recon needs that). But the app's own calls that carry secrets or evidence (fleet export, Headscale API key, msfrpcd without SSL) refuse plain `http://` to anything except loopback, private LAN, Tailscale/CGNAT, `.local`/`.lan`/`.ts.net` style names and single-label hosts. Use https for public hosts. msfrpcd with SSL still accepts its self-signed certificate without verification, so use it only on a network you trust.
+
+
 
 ## UI / Navigation (Neon Design System)
 

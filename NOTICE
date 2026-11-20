@@ -237,3 +237,9 @@ crt.sh, Shodan, Censys, etc.) or called through their public endpoints (Cloudfla
 and Google DNS-over-HTTPS, rdap.org, crt.sh JSON, Gravatar avatar URLs, and Have I
 Been Pwned v3 only with the user's own API key). No third-party API keys are
 bundled. No face-recognition services are used.
+
+Public Suffix List (app/src/main/assets/psl/public_suffix_list.dat)
+  Unmodified copy of the Public Suffix List from https://publicsuffix.org
+  (fetched from github.com/publicsuffix/list), licensed under the Mozilla Public
+  License 2.0 (https://mozilla.org/MPL/2.0/). Used to find a host's registrable
+  domain. The file keeps its original MPL notice at the top.
