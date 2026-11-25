@@ -58,6 +58,14 @@ How-to: [docs/MANUAL.md](docs/MANUAL.md)
 
 The same manual is searchable in the in-app Help screen.
 
+## Victorious fleet
+
+Victorious Browser is part of the [Victorious Framework](https://victorious-framework.pages.dev), a family of Android and PC tools by Don Victor. **It works standalone; fleet integrations are optional.** Related: [droidcommand-AI](https://github.com/Victorious93/droidcommand-AI), [victorious-mesh](https://github.com/Victorious93/victorious-mesh). The roster is in [victorious-fleet](https://github.com/Victorious93/victorious-fleet) and live status is in [fleet-manifest](https://github.com/Victorious93/fleet-manifest).
+
+## Contributing
+
+Issues and pull requests are welcome. Please describe what you changed and why, and keep documentation accurate to the code — do not invent features, builds, or test results.
+
 ## License
 
 This repository does not include a `LICENSE` file.
